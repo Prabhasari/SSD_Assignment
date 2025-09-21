@@ -1,0 +1,50 @@
+.btnsubb{
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.btnsubb button{
+  border-radius: 5px;
+  margin-bottom: 10px;
+  height: 38px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+  padding-left: 10px;
+  padding-right: 10px;
+  background-color: #0056b3;
+  color: white;
+}
+.btnsubb button :hover{
+  background-color: #0d70ad;;
+}
+
+.form{
+  margin-bottom: 5px;
+}
+
+.form input{
+  border-radius: 5px;
+  margin-bottom: 10px;
+  height: 40px;
+  width: 100%;
+}
+
+.formTime input{
+  border-radius: 5px;
+  margin-bottom: 10px;
+  height: 40px;
+  width: 90%;
+  margin-left: 2px;
+  margin-right: 2px;
+}
+.containerF{
+  width: 700px;
+}
+.formDate input{
+  border-radius: 5px;
+  margin-bottom: 10px;
+  height: 40px;
+  width: 90%;
+  margin-left: 2px;
+  margin-right: 2px;
+}
