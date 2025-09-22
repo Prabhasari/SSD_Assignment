@@ -227,42 +227,47 @@ export const updateEventController = async (req, res) => {
 
 //store notification details
 export const addNotifyControll = async (req, res) => {
-    try {
-        // Sanitize Item ID
-        const Iid = sanitize(req.params.Iid);
-        if (!mongoose.Types.ObjectId.isValid(Iid)) {
-            return res.status(400).json({ success: false, message: "Invalid Item ID" });
-        }
-
-        // Sanitize and validate input
-        const userName = sanitize(req.body.userName);
-        const userPNumber = sanitize(req.body.userPNumber);
-        const email = sanitize(req.body.email);
-
-        if (!userName) return res.status(400).json({ success: false, message: 'Name is required' });
-        if (!userPNumber) return res.status(400).json({ success: false, message: 'Phone Number is required' });
-        if (!email) return res.status(400).json({ success: false, message: 'Email is required' });
-
-        // Optional: stricter email & phone validation
-        if (!validator.isEmail(email)) return res.status(400).json({ success: false, message: 'Invalid email format' });
-        if (!/^\d{10,15}$/.test(userPNumber)) return res.status(400).json({ success: false, message: 'Invalid phone number' });
-
-        // Check duplicate
-        const existingNotify = await LostNotify.findOne({ 
-            ItemID: mongoose.Types.ObjectId(Iid), 
-            email 
-        });
-        if (existingNotify) {
-            return res.status(200).json({ success: true, message: 'You have already sent notification' });
-        }
-
-        // Save notification
-        const notifyDetails = await new LostNotify({ userName, userPNumber, email, ItemID: Iid }).save();
-
-        res.status(201).json({ success: true, message: 'Notification sent successfully', notifyDetails });
-
-    } catch (error) {
-        console.error("Error in sending notification:", error);
-        res.status(500).json({ success: false, message: "Error in sending notification", error: error.message });
+  try {
+    // Sanitize and validate Item ID
+    const Iid = sanitize(String(req.params.Iid));
+    if (!mongoose.Types.ObjectId.isValid(Iid)) {
+      return res.status(400).json({ success: false, message: "Invalid Item ID" });
     }
+
+    // Sanitize and validate input fields
+    const userName = sanitize(String(req.body.userName));
+    const userPNumber = sanitize(String(req.body.userPNumber));
+    const email = sanitize(String(req.body.email));
+
+    if (!userName) return res.status(400).json({ success: false, message: 'Name is required' });
+    if (!userPNumber) return res.status(400).json({ success: false, message: 'Phone Number is required' });
+    if (!email) return res.status(400).json({ success: false, message: 'Email is required' });
+
+    // Optional: stricter email & phone validation
+    if (!validator.isEmail(email)) return res.status(400).json({ success: false, message: 'Invalid email format' });
+    if (!/^\d{10,15}$/.test(userPNumber)) return res.status(400).json({ success: false, message: 'Invalid phone number' });
+
+    // Check for duplicate notifications
+    const existingNotify = await LostNotify.findOne({ 
+      ItemID: mongoose.Types.ObjectId(Iid), 
+      email: { $eq: email } // safe query to prevent injection
+    });
+    if (existingNotify) {
+      return res.status(200).json({ success: true, message: 'You have already sent notification' });
+    }
+
+    // Save notification
+    const notifyDetails = await new LostNotify({ 
+      userName, 
+      userPNumber, 
+      email, 
+      ItemID: mongoose.Types.ObjectId(Iid) 
+    }).save();
+
+    res.status(201).json({ success: true, message: 'Notification sent successfully', notifyDetails });
+
+  } catch (error) {
+    console.error("Error in sending notification:", error);
+    res.status(500).json({ success: false, message: "Error in sending notification", error: error.message });
+  }
 };
