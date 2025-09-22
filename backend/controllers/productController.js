@@ -133,21 +133,40 @@ export const productPhotoController = async (req,res) => {
 };
 
 
-// delete product
-export const deleteProductController = async (req,res) => {
+export const deleteProductController = async (req, res) => {
     try {
-        await productModel.findByIdAndDelete(req.params.pid).select("-photo")
+        // Sanitize the ID to prevent NoSQL injection
+        const pid = sanitize(String(req.params.pid));
+
+        // Validate MongoDB ObjectId format
+        if (!pid.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(400).send({
+                success: false,
+                message: "Invalid product ID",
+            });
+        }
+
+        // Find and delete the product
+        const deletedProduct = await productModel.findByIdAndDelete(pid).select("-photo");
+
+        if (!deletedProduct) {
+            return res.status(404).send({
+                success: false,
+                message: "Product not found",
+            });
+        }
+
         res.status(200).send({
-            success:true,
-            message:'Product Deleted Successfully'
-        })
+            success: true,
+            message: "Product deleted successfully",
+        });
     } catch (error) {
-        console.log(error)
+        console.error(error);
         res.status(500).send({
-            success:false,
-            message:'Error while deleting product',
-            error
-        })
+            success: false,
+            message: "Error while deleting product",
+            error,
+        });
     }
 };
 
