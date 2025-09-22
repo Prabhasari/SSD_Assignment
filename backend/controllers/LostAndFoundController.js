@@ -198,7 +198,7 @@ export const addNotifyControll = async (req, res) => {
         if (!email) return res.status(400).json({ success: false, message: 'Email is required' });
 
         // Check if notification already exists
-        const existingEmailNotify = await LostNotify.findOne({ ItemID: Iid, email });
+        const existingEmailNotify = await LostNotify.findOne({ ItemID: { $eq: Iid }, email:{$eq:email} });
         if (existingEmailNotify) {
             return res.status(200).json({
                 success: true,

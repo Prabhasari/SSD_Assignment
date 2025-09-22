@@ -504,7 +504,7 @@ export const forgotPasswordController = async (req, res) => {
     const sanitizedEmail = sanitize(email);
 
     // Check if the user exists
-    const user = await userModel.findOne({ email: sanitizedEmail });
+    const user = await userModel.findOne({ email: { $eq: sanitizedEmail } });
     if (!user) {
       return res.status(404).send({
         success: false,

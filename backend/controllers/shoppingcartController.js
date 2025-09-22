@@ -15,7 +15,7 @@ export const addToCart = async (req, res) => {
         if (!quantity || isNaN(quantity) || quantity <= 0) return res.status(400).json({ success: false, message: 'Valid quantity is required' });
 
         // Check if item already exists in the cart
-        const existingCart = await Cart.findOne({ product, email });
+        const existingCart = await Cart.findOne({ product: {$eq:product}, email: {$eq:email} });
         if (existingCart) {
             return res.status(200).json({
                 success: false,
