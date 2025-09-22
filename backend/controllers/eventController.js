@@ -226,51 +226,50 @@ export const updateEventController = async (req, res) => {
 };
 
 //store notification details
-export const addNotifyControll = async(req,res) => {
-    const { Iid } = req.params;
+export const addNotifyControll = async (req, res) => {
     try {
-        const { userName, userPNumber,email } = req.body;
+        // Sanitize Item ID to prevent NoSQL injection
+        const Iid = sanitize(req.params.Iid);
 
-        if (!userName) {
-            return res.status(400).send({ error: 'Name is required' });
-        }
-        if (!userPNumber) {
-            return res.status(400).send({ error: 'Phone Number is required' });
-        }
-        if (!email) {
-            return res.status(400).send({ error: 'email is required' });
-        }
-        if (!Iid) {
-            return res.status(400).send({ error: 'Item ID is required' });
-        }
-
-        //check cart
-        const exisitingEmailNotify = await LostNotify.findOne({ItemID:Iid,email});
-
-        //exisit email
-        if(exisitingEmailNotify){
-            return res.status(200).send({
-                success:true,
-                message:'You Already send notification',
+        // Validate that it's a valid MongoDB ObjectId
+        if (!Iid.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid Item ID",
             });
         }
 
-        //save to database
-        const notifyDetails = await new LostNotify({userName,userPNumber,email,ItemID:Iid}).save();
+        const { userName, userPNumber, email } = req.body;
 
-        res.status(201).send({
-            success:true,
-            message:'Notification Send Successfully',
+        // Basic validation
+        if (!userName) return res.status(400).json({ success: false, message: 'Name is required' });
+        if (!userPNumber) return res.status(400).json({ success: false, message: 'Phone Number is required' });
+        if (!email) return res.status(400).json({ success: false, message: 'Email is required' });
+
+        // Check if notification already exists
+        const existingEmailNotify = await LostNotify.findOne({ ItemID: Iid, email });
+        if (existingEmailNotify) {
+            return res.status(200).json({
+                success: true,
+                message: 'You have already sent notification',
+            });
+        }
+
+        // Save to database
+        const notifyDetails = await new LostNotify({ userName, userPNumber, email, ItemID: Iid }).save();
+
+        res.status(201).json({
+            success: true,
+            message: 'Notification sent successfully',
             notifyDetails,
         });
 
-        
     } catch (error) {
-        res.status(500).send({
-            success:false,
-            error,
-            message:"Error in send Notification",
+        console.error("Error in sending notification:", error);
+        res.status(500).json({
+            success: false,
+            message: "Error in sending notification",
+            error: error.message,
         });
-        
     }
-}
+};
