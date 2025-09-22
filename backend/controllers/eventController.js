@@ -1,4 +1,5 @@
 import eventModel from "../models/eventModel.js";
+import sanitize from "mongo-sanitize";
 
 //Add new lost Found item
 export const AddNewEvent = async(req,res) => {
@@ -99,24 +100,35 @@ export const EventPhotoController = async(req,res) => {
     }
 };
 
-//delete Address
-export const deleteEventController = async (req, res) =>{
+export const deleteEventController = async (req, res) => {
     try {
-        const { id } = req.params;
+        // Sanitize the id to prevent NoSQL injection
+        const id = sanitize(req.params.id);
+
+        // Optionally, validate that it's a valid MongoDB ObjectId
+        if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(400).send({
+                success: false,
+                message: "Invalid event ID",
+            });
+        }
+
         await eventModel.findByIdAndDelete(id);
+
         res.status(200).send({
             success: true,
-            message: "Items Removed Successfully",
+            message: "Event deleted successfully",
         });
     } catch (error) {
         console.log(error);
         res.status(500).send({
             success: false,
-            message: "error while deleting Address",
+            message: "Error while deleting event",
             error,
         });
     }
 };
+
 
 //get single lostItem
 export const getEventController = async(req,res) => {
