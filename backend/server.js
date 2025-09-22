@@ -11,6 +11,7 @@ import shoppingcartRoutes from './routes/shoppingcartRoute.js'
 import LostAndFoundRoutes from './routes/LostAndFoundRoute.js'
 import eventRoutes from './routes/eventRoute.js'
 //import fileUpload from 'express-fileupload';
+import sanitize from "mongo-sanitize";
 
 import cors from "cors";
 
