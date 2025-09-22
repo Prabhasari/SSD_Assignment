@@ -408,45 +408,46 @@ export const testcontroller = (req,res) => {
 
 //delete user profile
 export const deleteUserProfileController = async (req, res) => {
-    try {
-        // Sanitize the user ID from the authenticated request
-        const userId = sanitize(req.user._id);
+  try {
+    // Sanitize and cast the user ID
+    const userId = sanitize(String(req.user._id));
 
-        // Validate that it's a valid MongoDB ObjectId
-        if (!userId.match(/^[0-9a-fA-F]{24}$/)) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid user ID",
-            });
-        }
-
-        // Check if user exists
-        const user = await userModel.findById(userId);
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: "User not found",
-            });
-        }
-
-        // Delete the user
-        await userModel.findByIdAndDelete(userId);
-
-        // Optionally, perform any additional cleanup here (e.g., related orders, wishlist, cart)
-
-        res.status(200).json({
-            success: true,
-            message: "User deleted successfully",
-        });
-    } catch (error) {
-        console.error("Error deleting user:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to delete user",
-            error: error.message,
-        });
+    // Validate MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID",
+      });
     }
+
+    // Check if user exists
+    const user = await userModel.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Delete the user safely
+    await userModel.findByIdAndDelete(userId);
+
+    // Optional: Delete related data (orders, cart, wishlist) here
+
+    return res.status(200).json({
+      success: true,
+      message: "User deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting user:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete user",
+      error: error.message,
+    });
+  }
 };
+
   
 
 //delete shop profile
