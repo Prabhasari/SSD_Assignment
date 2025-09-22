@@ -1,6 +1,5 @@
 import Cart from '../models/shoppingcartModel.js';
-
-
+import sanitize from "mongo-sanitize";
 
 //Add to cart 
 
@@ -83,52 +82,84 @@ export const getCart = async(req, res) =>{
 
 
 //update card details
-export const updateCartItemQuantity = async (req,res) => {
+export const updateCartItemQuantity = async (req, res) => {
     try {
-        const {
-            product,
-            quantity
-            } = req.body;
-        const {id} = req.params;
+        const { product, quantity } = req.body;
+        
+        // Sanitize and convert ID to string
+        const id = sanitize(String(req.params.id));
+
+        // Validate MongoDB ObjectId
+        if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(400).send({
+                success: false,
+                message: "Invalid cart item ID",
+            });
+        }
+
+        // Update cart item
         const cart = await Cart.findByIdAndUpdate(
             id,
-            {product,quantity},
-            {new: true}
-            
+            { product, quantity },
+            { new: true }
         );
+
+        if (!cart) {
+            return res.status(404).send({
+                success: false,
+                message: "Cart item not found",
+            });
+        }
+
         res.status(200).send({
             success: true,
-            message: "quantity Updated Successfully",
+            message: "Quantity updated successfully",
             cart,
         });
-        
+
     } catch (error) {
-        console.log(error)
+        console.error(error);
         res.status(500).send({
-            success:false,
+            success: false,
+            message: "Error while updating cart quantity",
             error,
-            message:"Error while updating quantity"
-        })
-        
+        });
     }
 };
 
 
-
-//delete cart details
-export const deleteCartItem = async (req, res) =>{
+export const deleteCartItem = async (req, res) => {
     try {
-        const { id } = req.params;
-        await Cart.findByIdAndDelete(id);
+        // Sanitize the ID to prevent NoSQL injection
+        const id = sanitize(String(req.params.id));
+
+        // Validate MongoDB ObjectId format
+        if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(400).send({
+                success: false,
+                message: "Invalid cart item ID",
+            });
+        }
+
+        // Find and delete the cart item
+        const deletedItem = await Cart.findByIdAndDelete(id);
+
+        if (!deletedItem) {
+            return res.status(404).send({
+                success: false,
+                message: "Cart item not found",
+            });
+        }
+
         res.status(200).send({
             success: true,
-            message: "Cart Details Deleted Successfully",
+            message: "Cart item deleted successfully",
         });
     } catch (error) {
-        console.log(error);
+        console.error(error);
         res.status(500).send({
             success: false,
-            message: "error while deleting Card Details",
+            message: "Error while deleting cart item",
             error,
         });
     }
