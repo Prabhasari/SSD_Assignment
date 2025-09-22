@@ -152,6 +152,7 @@ export const promotionImageController = async(req,res) => {
     }
 }
 
+//delete promotion
 export const deletePromotionController = async (req, res) => {
     try {
         // Sanitize the ID to prevent NoSQL injection
@@ -189,35 +190,52 @@ export const deletePromotionController = async (req, res) => {
     }
 };
 
-
-// Update promotion
+//update promotion
 export const updatePromotionController = async (req, res) => {
     try {
-        const promotion = await promotionModel.findByIdAndUpdate(req.params.pid, req.fields, {
-            new: true,
-        });
+        // Sanitize the ID to prevent NoSQL injection
+        const pid = sanitize(String(req.params.pid));
 
+        // Validate MongoDB ObjectId format
+        if (!pid.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(400).send({
+                success: false,
+                message: "Invalid promotion ID",
+            });
+        }
+
+        // Update the promotion
+        const promotion = await promotionModel.findByIdAndUpdate(pid, req.fields, { new: true });
+
+        if (!promotion) {
+            return res.status(404).send({
+                success: false,
+                message: "Promotion not found",
+            });
+        }
+
+        // Handle image upload
         if (req.files && req.files.promotionImage) {
             promotion.promotionImage.data = fs.readFileSync(req.files.promotionImage.path);
             promotion.promotionImage.contentType = req.files.promotionImage.type;
         }
 
         await promotion.save();
+
         res.status(200).send({
             success: true,
-            message: 'Promotion updated successfully',
+            message: "Promotion updated successfully",
             promotion,
         });
     } catch (error) {
         console.error(error);
         res.status(500).send({
             success: false,
-            message: 'Error while updating promotion',
+            message: "Error while updating promotion",
             error,
         });
     }
 };
-
 
 // Get promotions by shop
 export const getPromotionByShopController = async (req, res) => {
