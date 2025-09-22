@@ -100,27 +100,37 @@ export const EventPhotoController = async(req,res) => {
     }
 };
 
+
 export const deleteEventController = async (req, res) => {
     try {
-        // Sanitize the id to prevent NoSQL injection
-        const id = sanitize(req.params.id);
+        // Sanitize user input and cast to string
+        const id = sanitize(String(req.params.id));
 
-        // Optionally, validate that it's a valid MongoDB ObjectId
-        if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+        // Validate MongoDB ObjectId
+        if (!mongoose.Types.ObjectId.isValid(id)) {
             return res.status(400).send({
                 success: false,
                 message: "Invalid event ID",
             });
         }
 
-        await eventModel.findByIdAndDelete(id);
+        // Attempt to delete the event
+        const deletedEvent = await eventModel.findByIdAndDelete(id);
+
+        if (!deletedEvent) {
+            return res.status(404).send({
+                success: false,
+                message: "Event not found",
+            });
+        }
 
         res.status(200).send({
             success: true,
             message: "Event deleted successfully",
+            event: deletedEvent,
         });
     } catch (error) {
-        console.log(error);
+        console.error("Error deleting event:", error);
         res.status(500).send({
             success: false,
             message: "Error while deleting event",
