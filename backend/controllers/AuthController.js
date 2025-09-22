@@ -271,95 +271,96 @@ export const userLoginController = async (req, res) => {
 };
 
 
+
 export const updateShopProfileController = async (req, res) => {
-    try {
-        // Sanitize the user/shop ID
-        const shopId = sanitize(req.user._id);
+  try {
+    // Sanitize the user/shop ID
+    const shopId = sanitize(String(req.user._id));
 
-        // Validate that it's a valid MongoDB ObjectId
-        if (!shopId.match(/^[0-9a-fA-F]{24}$/)) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid shop ID",
-            });
-        }
-
-        const {
-            fullname,
-            owner_email,
-            owner_contact,
-            password,
-            nic,
-            businessregno,
-            tax_id_no,
-            shopname,
-            email,
-            businesstype,
-            category,
-            description,
-            operating_hrs_from,
-            operating_hrs_to,
-            shoplocation,
-            shopcontact,
-        } = req.body;
-
-        // Find the shop by ID
-        const shop = await shopModel.findById(shopId);
-        if (!shop) {
-            return res.status(404).json({
-                success: false,
-                message: "Shop not found",
-            });
-        }
-
-        // Validate password length if provided
-        if (password && password.length < 8) {
-            return res.status(400).json({
-                success: false,
-                message: "Password must be at least 8 characters long",
-            });
-        }
-
-        // Hash the new password if provided
-        const hashedPassword = password ? await hashPassword(password) : shop.password;
-
-        // Update shop details
-        const updatedShop = await shopModel.findByIdAndUpdate(
-            shopId,
-            {
-                fullname: fullname || shop.fullname,
-                owner_email: owner_email || shop.owner_email,
-                owner_contact: owner_contact || shop.owner_contact,
-                password: hashedPassword,
-                nic: nic || shop.nic,
-                businessregno: businessregno || shop.businessregno,
-                tax_id_no: tax_id_no || shop.tax_id_no,
-                shopname: shopname || shop.shopname,
-                email: email || shop.email,
-                businesstype: businesstype || shop.businesstype,
-                category: category || shop.category,
-                description: description || shop.description,
-                operating_hrs_from: operating_hrs_from || shop.operating_hrs_from,
-                operating_hrs_to: operating_hrs_to || shop.operating_hrs_to,
-                shoplocation: shoplocation || shop.shoplocation,
-                shopcontact: shopcontact || shop.shopcontact,
-            },
-            { new: true }
-        );
-
-        res.status(200).json({
-            success: true,
-            message: "Profile updated successfully",
-            updatedShop,
-        });
-    } catch (error) {
-        console.error("Error updating shop profile:", error);
-        res.status(500).json({
-            success: false,
-            message: "Error while updating shop profile",
-            error: error.message,
-        });
+    // Validate that it's a valid MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(shopId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid shop ID",
+      });
     }
+
+    const {
+      fullname,
+      owner_email,
+      owner_contact,
+      password,
+      nic,
+      businessregno,
+      tax_id_no,
+      shopname,
+      email,
+      businesstype,
+      category,
+      description,
+      operating_hrs_from,
+      operating_hrs_to,
+      shoplocation,
+      shopcontact,
+    } = req.body;
+
+    // Find the shop by ID
+    const shop = await shopModel.findById(shopId);
+    if (!shop) {
+      return res.status(404).json({
+        success: false,
+        message: "Shop not found",
+      });
+    }
+
+    // Validate password length if provided
+    if (password && password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 8 characters long",
+      });
+    }
+
+    // Hash the new password if provided
+    const hashedPassword = password ? await hashPassword(password) : shop.password;
+
+    // Update shop details
+    const updatedShop = await shopModel.findByIdAndUpdate(
+      shopId,
+      {
+        fullname: fullname || shop.fullname,
+        owner_email: owner_email || shop.owner_email,
+        owner_contact: owner_contact || shop.owner_contact,
+        password: hashedPassword,
+        nic: nic || shop.nic,
+        businessregno: businessregno || shop.businessregno,
+        tax_id_no: tax_id_no || shop.tax_id_no,
+        shopname: shopname || shop.shopname,
+        email: email || shop.email,
+        businesstype: businesstype || shop.businesstype,
+        category: category || shop.category,
+        description: description || shop.description,
+        operating_hrs_from: operating_hrs_from || shop.operating_hrs_from,
+        operating_hrs_to: operating_hrs_to || shop.operating_hrs_to,
+        shoplocation: shoplocation || shop.shoplocation,
+        shopcontact: shopcontact || shop.shopcontact,
+      },
+      { new: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      updatedShop,
+    });
+  } catch (error) {
+    console.error("Error updating shop profile:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error while updating shop profile",
+      error: error.message,
+    });
+  }
 };
   
 
@@ -490,54 +491,50 @@ export const deleteShopProfileController = async (req, res) => {
   
 
 export const forgotPasswordController = async (req, res) => {
-    try {
-      const { email, newPassword, re_Password } = req.body;
-  
-      // Validate input fields
-      if (!email) {
-        return res.status(400).send({ message: 'Email is required' });
-      }
-      if (!newPassword) {
-        return res.status(400).send({ message: 'New password is required' });
-      }
-      if (!re_Password) {
-        return res.status(400).send({ message: 'Please confirm your new password' });
-      }
-      if (newPassword !== re_Password) {
-        return res.status(400).send({ message: 'Passwords do not match' });
-      }
-  
-      // Check if the user exists
-      const user = await userModel.findOne({ email });
-      if (!user) {
-        return res.status(404).send({
-          success: false,
-          message: "User with this email does not exist",
-        });
-      }
-  
-      // Hash the new password
-      const hashedPassword = await hashPassword(newPassword);
-  
-      // Update the user's password
-      await userModel.findByIdAndUpdate(user._id, { password: hashedPassword });
-  
-      return res.status(200).send({
-        success: true,
-        message: "Password reset successfully",
-      });
-    } catch (error) {
-      console.log(error);
-      return res.status(500).send({
+  try {
+    const { email, newPassword, re_Password } = req.body;
+
+    // Validate input fields
+    if (!email) return res.status(400).send({ message: 'Email is required' });
+    if (!newPassword) return res.status(400).send({ message: 'New password is required' });
+    if (!re_Password) return res.status(400).send({ message: 'Please confirm your new password' });
+    if (newPassword !== re_Password) return res.status(400).send({ message: 'Passwords do not match' });
+
+    // Sanitize email to prevent NoSQL injection
+    const sanitizedEmail = sanitize(email);
+
+    // Check if the user exists
+    const user = await userModel.findOne({ email: sanitizedEmail });
+    if (!user) {
+      return res.status(404).send({
         success: false,
-        message: 'Something went wrong',
-        error: error.message,  // More descriptive error message
+        message: "User with this email does not exist",
       });
     }
-  };
-  
 
-  // Controller to get total user and shop count
+    // Hash the new password
+    const hashedPassword = await hashPassword(newPassword);
+
+    // Update the user's password
+    await userModel.findByIdAndUpdate(user._id, { password: hashedPassword });
+
+    return res.status(200).send({
+      success: true,
+      message: "Password reset successfully",
+    });
+
+  } catch (error) {
+    console.error("Forgot password error:", error);
+    return res.status(500).send({
+      success: false,
+      message: 'Something went wrong',
+      error: error.message,
+    });
+  }
+};
+
+  
+// Controller to get total user and shop count
 export const getTotalUserCountController = async (req, res) => {
   try {
       // Get the total count of users
