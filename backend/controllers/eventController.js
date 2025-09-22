@@ -160,52 +160,68 @@ export const getEventController = async(req,res) => {
     }
 }
 
-// update Event
-export const updateEventController = async (req,res) => {
+export const updateEventController = async (req, res) => {
     try {
-        const {title,venue,email,startDate,endDate,startTime,endTime} = req.body
-        const {image} = req.files
+        const { title, venue, email, startDate, endDate, startTime, endTime } = req.body;
+        const image = req.files?.image;
 
-        // Validation
+        // Basic validation
         switch(true){
             case !title:
-                return res.status(500).send({error:'Event Title is Required'})
+                return res.status(400).send({ error: 'Event Title is Required' });
             case !startDate:
-                return res.status(500).send({error:"Start Date is Required"})
+                return res.status(400).send({ error: 'Start Date is Required' });
             case !endDate:
-                return res.status(500).send({error:"End Date is Required"})
+                return res.status(400).send({ error: 'End Date is Required' });
             case !venue:
-                return res.status(500).send({error:"venue is Required"})
+                return res.status(400).send({ error: 'Venue is Required' });
             case !email:
-                return res.status(500).send({error:"email is Required"})
+                return res.status(400).send({ error: 'Email is Required' });
             case !startTime:
-                return res.status(500).send({error:"email is Required"})
+                return res.status(400).send({ error: 'Start Time is Required' });
             case !endTime:
-                return res.status(500).send({error:"email is Required"})
+                return res.status(400).send({ error: 'End Time is Required' });
         }
 
-        const Event = await eventModel.findByIdAndUpdate(req.params._id, title,venue,email,startDate,endDate,startTime,endTime, {new:true})
+        // Sanitize and validate ID
+        const id = sanitize(String(req.params._id));
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).send({ success: false, message: "Invalid event ID" });
+        }
+
+        // Prepare update object
+        const updateData = { title, venue, email, startDate, endDate, startTime, endTime };
+
+        // Update the event
+        const event = await eventModel.findByIdAndUpdate(id, updateData, { new: true });
+
+        if (!event) {
+            return res.status(404).send({ success: false, message: "Event not found" });
+        }
+
         // Handle image upload
         if (image && image.data && image.mimetype) {
-            if(image.size > 1000000){
-                return res.status(500).send({error:"Photo is Required and should be less than 1mb"})
+            if (image.size > 1000000) {
+                return res.status(400).send({ error: "Image must be less than 1MB" });
             }
-            Event.image.data = image.data;
-            Event.image.contentType = image.mimetype;
+            event.image.data = image.data;
+            event.image.contentType = image.mimetype;
+            await event.save();
         }
-        await Event.save()
-        res.status(201).send({
-            success:true,
-            message:'Product Updated Successfully',
-            Event
-        })
+
+        res.status(200).send({
+            success: true,
+            message: "Event updated successfully",
+            event,
+        });
+
     } catch (error) {
-        console.log(error)
+        console.error("Error updating event:", error);
         res.status(500).send({
-            success:false,
+            success: false,
+            message: "Error updating event",
             error,
-            message:'Error in Update Product'
-        })
+        });
     }
 };
 
