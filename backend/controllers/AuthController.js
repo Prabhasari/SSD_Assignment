@@ -2,9 +2,10 @@ import { comparePassword, hashPassword } from "../helpers/AuthHelper.js";
 import shopModel from "../models/shopModel.js";
 import userModel from "../models/userModel.js";
 import JWT from "jsonwebtoken";
+import sanitize from "mongo-sanitize";
 import { z } from "zod";
 
-// ✅ Zod schema for registration validation
+// Zod schema for registration validation
 const registerSchema = z.object({
   fullname: z.string().min(1, "Full name is required"),
   email: z.string().email("Invalid email format"),
@@ -248,77 +249,96 @@ export const userLoginController = async (req, res) => {
 };
 
 
-//update shop details
-  export const updateShopProfileController = async (req, res) => {
+export const updateShopProfileController = async (req, res) => {
     try {
-      const {
-        fullname,
-        owner_email,
-        owner_contact,
-        password,
-        nic,
-        businessregno,
-        tax_id_no,
-        shopname,
-        email,
-        businesstype,
-        category,
-        description,
-        operating_hrs_from,
-        operating_hrs_to,
-        shoplocation,
-        shopcontact,
-      } = req.body;
-  
-      // Find the shop by the owner's ID
-      const shop = await shopModel.findById(req.user._id);
-  
-      // Validate password length
-      if (password && password.length < 8) {
-        return res.json({ error: "Password is required and must be at least 8 characters long" });
-      }
-  
-      // Hash the new password if provided
-      const hashedPassword = password ? await hashPassword(password) : undefined;
-  
-      // Update shop details
-      const updatedShop = await shopModel.findByIdAndUpdate(
-        req.user._id,
-        {
-          fullname: fullname || shop.fullname,
-          owner_email: owner_email || shop.owner_email,
-          owner_contact: owner_contact || shop.owner_contact,
-          password: hashedPassword || shop.password,
-          nic: nic || shop.nic,
-          businessregno: businessregno || shop.businessregno,
-          tax_id_no: tax_id_no || shop.tax_id_no,
-          shopname: shopname || shop.shopname,
-          email: email || shop.email,
-          businesstype: businesstype || shop.businesstype,
-          category: category || shop.category,
-          description: description || shop.description,
-          operating_hrs_from: operating_hrs_from || shop.operating_hrs_from,
-          operating_hrs_to: operating_hrs_to || shop.operating_hrs_to,
-          shoplocation: shoplocation || shop.shoplocation,
-          shopcontact: shopcontact || shop.shopcontact,
-        },
-        { new: true }
-      );
-  
-      res.status(200).send({
-        success: true,
-        message: "Profile updated successfully",
-        updatedShop,
-      });
+        // Sanitize the user/shop ID
+        const shopId = sanitize(req.user._id);
+
+        // Validate that it's a valid MongoDB ObjectId
+        if (!shopId.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid shop ID",
+            });
+        }
+
+        const {
+            fullname,
+            owner_email,
+            owner_contact,
+            password,
+            nic,
+            businessregno,
+            tax_id_no,
+            shopname,
+            email,
+            businesstype,
+            category,
+            description,
+            operating_hrs_from,
+            operating_hrs_to,
+            shoplocation,
+            shopcontact,
+        } = req.body;
+
+        // Find the shop by ID
+        const shop = await shopModel.findById(shopId);
+        if (!shop) {
+            return res.status(404).json({
+                success: false,
+                message: "Shop not found",
+            });
+        }
+
+        // Validate password length if provided
+        if (password && password.length < 8) {
+            return res.status(400).json({
+                success: false,
+                message: "Password must be at least 8 characters long",
+            });
+        }
+
+        // Hash the new password if provided
+        const hashedPassword = password ? await hashPassword(password) : shop.password;
+
+        // Update shop details
+        const updatedShop = await shopModel.findByIdAndUpdate(
+            shopId,
+            {
+                fullname: fullname || shop.fullname,
+                owner_email: owner_email || shop.owner_email,
+                owner_contact: owner_contact || shop.owner_contact,
+                password: hashedPassword,
+                nic: nic || shop.nic,
+                businessregno: businessregno || shop.businessregno,
+                tax_id_no: tax_id_no || shop.tax_id_no,
+                shopname: shopname || shop.shopname,
+                email: email || shop.email,
+                businesstype: businesstype || shop.businesstype,
+                category: category || shop.category,
+                description: description || shop.description,
+                operating_hrs_from: operating_hrs_from || shop.operating_hrs_from,
+                operating_hrs_to: operating_hrs_to || shop.operating_hrs_to,
+                shoplocation: shoplocation || shop.shoplocation,
+                shopcontact: shopcontact || shop.shopcontact,
+            },
+            { new: true }
+        );
+
+        res.status(200).json({
+            success: true,
+            message: "Profile updated successfully",
+            updatedShop,
+        });
     } catch (error) {
-      console.log(error);
-      res.status(400).send({
-        success: false,
-        message: "Error while updating data",
-        error,
-      });
+        console.error("Error updating shop profile:", error);
+        res.status(500).json({
+            success: false,
+            message: "Error while updating shop profile",
+            error: error.message,
+        });
     }
-  };
+};
   
 
 //get all shops
@@ -363,41 +383,50 @@ export const testcontroller = (req,res) => {
     res.send("Protected route");
 }
 
-
 //delete user profile
 export const deleteUserProfileController = async (req, res) => {
     try {
-  
-      // Check if user exists
-      const user = await userModel.findById(req.user._id);
-      if (!user) {
-        return res
-          .status(404)
-          .json({ success: false, message: "User not found" });
-      }
-  
-      // Delete the user
-      await userModel.findByIdAndDelete(user._id);
-  
-      // Optionally, perform any additional cleanup or related actions here
-  
-      res
-        .status(200)
-        .json({ success: true, message: "User deleted successfully" });
+        // Sanitize the user ID from the authenticated request
+        const userId = sanitize(req.user._id);
+
+        // Validate that it's a valid MongoDB ObjectId
+        if (!userId.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid user ID",
+            });
+        }
+
+        // Check if user exists
+        const user = await userModel.findById(userId);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found",
+            });
+        }
+
+        // Delete the user
+        await userModel.findByIdAndDelete(userId);
+
+        // Optionally, perform any additional cleanup here (e.g., related orders, wishlist, cart)
+
+        res.status(200).json({
+            success: true,
+            message: "User deleted successfully",
+        });
     } catch (error) {
-      console.error("Error deleting user:", error);
-      res.status(500).json({
-        success: false,
-        message: "Failed to delete user",
-        error: error.message,
-      });
+        console.error("Error deleting user:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to delete user",
+            error: error.message,
+        });
     }
-  };
+};
   
 
-
-
-  //delete shop profile
+//delete shop profile
 export const deleteShopProfileController = async (req, res) => {
     try {
       
