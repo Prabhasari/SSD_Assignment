@@ -175,61 +175,77 @@ export const updateUserProfileController = async (req, res) => {
       });
     }
   };
-  
 
-//login for customer,user and admin  
+
+// Zod schema for login validation
+const loginSchema = z.object({
+  email: z.string().email("Invalid email format"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+// ==================== LOGIN ====================
 export const userLoginController = async (req, res) => {
-  
-    try {
-      const { email, password } = req.body;
-  
-      // Validate input
-      if (!email || !password) {
-        return res.status(400).send({ success: false, message: "Email and password are required" });
-      }
-  
-      // Check in users table
-      let user = await userModel.findOne({ email });
-      if (user) {
-        const match = await comparePassword(password, user.password);
-        if (match) {
-          const token = JWT.sign({ _id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "7d" });
-          return res.status(200).send({
-            success: true,
-            message: "Login successful",
-            token,
-            role: user.role,
-            user,
-          });
-        }
-      }
-  
-      // Check in shops table
-      let shop = await shopModel.findOne({ email });
-      if (shop) {
-        const match = await comparePassword(password, shop.password);
-        if (match) {
-          const token = JWT.sign({ _id: shop._id, role: 2 }, process.env.JWT_SECRET, { expiresIn: "7d" });
-          return res.status(200).send({
-            success: true,
-            message: "Shop owner login successful",
-            token,
-            role: 2,
-            shop,
-          });
-        }
-      }
-  
-      // If no match found
-      return res.status(400).send({ success: false, message: "Invalid email or password" });
-      
-    } catch (error) {
-      console.error("Login error:", error);
-      return res.status(500).send({ success: false, message: "Error during login", error });
+  try {
+    // validate input
+    const parsed = loginSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, errors: parsed.error.errors });
     }
-  };
-  
 
+    const { email, password } = parsed.data;
+
+    // safe query for user
+    const user = await userModel.findOne({ email: { $eq: email } });
+    if (user) {
+      const match = await comparePassword(password, user.password);
+      if (match) {
+        const token = JWT.sign(
+          { _id: user._id, role: user.role },
+          process.env.JWT_SECRET,
+          { expiresIn: "7d" }
+        );
+        return res.status(200).send({
+          success: true,
+          message: "Login successful",
+          token,
+          role: user.role,
+          user,
+        });
+      }
+    }
+
+    // safe query for shop
+    const shop = await shopModel.findOne({ email: { $eq: email } });
+    if (shop) {
+      const match = await comparePassword(password, shop.password);
+      if (match) {
+        const token = JWT.sign(
+          { _id: shop._id, role: 2 }, // assuming role 2 = shop owner
+          process.env.JWT_SECRET,
+          { expiresIn: "7d" }
+        );
+        return res.status(200).send({
+          success: true,
+          message: "Shop owner login successful",
+          token,
+          role: 2,
+          shop,
+        });
+      }
+    }
+
+    // no match
+    return res.status(400).send({ success: false, message: "Invalid email or password" });
+
+  } catch (error) {
+    console.error("Login error:", error);
+    return res.status(500).send({
+      success: false,
+      message: "Error during login",
+      error: error.message,
+    });
+  }
+};
 
 
 //update shop details
