@@ -31,6 +31,14 @@ app.use(cors())
 app.use(express.json())
 app.use(morgan('dev'))
 
+// sanitize all incoming inputs BEFORE routes
+app.use((req, res, next) => {
+  req.body = sanitize(req.body);
+  req.query = sanitize(req.query);
+  req.params = sanitize(req.params);
+  next();
+});
+
 //routes
 app.use("/api/v1/userauth",AuthRoutes)
 app.use("/api/v1/promotions",promotionRoutes)

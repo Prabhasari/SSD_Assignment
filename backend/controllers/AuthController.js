@@ -1,78 +1,71 @@
 import { comparePassword, hashPassword } from "../helpers/AuthHelper.js";
 import shopModel from "../models/shopModel.js";
 import userModel from "../models/userModel.js";
-import JWT from "jsonwebtoken"
+import JWT from "jsonwebtoken";
+import { z } from "zod";
 
-//register user
-export const userRegisterController = async(req,res) => {
-    try{
-        const {fullname,
-               email,
-               dob,
-               phone,
-               address,
-               shoppingPreference,
-               password
-            } = req.body
+// ✅ Zod schema for registration validation
+const registerSchema = z.object({
+  fullname: z.string().min(1, "Full name is required"),
+  email: z.string().email("Invalid email format"),
+  dob: z.string().min(1, "Date of birth is required"), // adjust type if you want Date
+  phone: z.string().min(10, "Phone number is required"),
+  address: z.string().min(1, "Residential address is required"),
+  shoppingPreference: z.string().optional(),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
 
-    //validation
-    if (!fullname) {
-        return res.send({ message: "Full name name is Required" });
-    }
-    if (!email) {
-        return res.send({ message: "Email is Required" });
-    }
-    if (!dob) {
-        return res.send({ message: "DOB is Required" });
-    }
-    if (!phone) {
-        return res.send({ message: "Phone Number is Required" });
-    }
-    if (!address) {
-        return res.send({ message: "Residential Address is Required" });
-    }
-    if (!password) {
-        return res.send({ message: "Password is Required" });
-    }
-    //check user
-    const existingUser = await userModel.findOne({email})
-
-    //existing user
-    if(existingUser){
-        return res.status(200).send({
-            success:false,
-            message:'Already Registered customer,Please login'
-        })
+// ==================== REGISTER USER ====================
+export const userRegisterController = async (req, res) => {
+  try {
+    // ✅ validate input
+    const parsed = registerSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ errors: parsed.error.errors });
     }
 
-    //register user
-    const hashedPassword = await hashPassword(password)
-    //save
+    const { fullname, email, dob, phone, address, shoppingPreference, password } = parsed.data;
+
+    // ✅ check if user already exists (safe query)
+    const existingUser = await userModel.findOne({ email: { $eq: email } });
+
+    if (existingUser) {
+      return res.status(409).send({
+        success: false,
+        message: "Already registered customer, please login",
+      });
+    }
+
+    // ✅ hash password
+    const hashedPassword = await hashPassword(password);
+
+    // ✅ save user
     const user = await new userModel({
-        fullname,
-        email,
-        dob,
-        phone,
-        address,
-        shoppingPreference,
-        password:hashedPassword
-    }).save()
+      fullname,
+      email,
+      dob,
+      phone,
+      address,
+      shoppingPreference,
+      password: hashedPassword,
+    }).save();
 
     res.status(201).send({
-        success: true,
-        message: "User Register Successfully",
-        user,
-    })
+      success: true,
+      message: "User registered successfully",
+      user,
+    });
 
-    }catch(error){
-        console.log(error)
-        res.status(500).send({
-            success:false,
-            message:'Error in Registration',
-            error
-        })
-    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({
+      success: false,
+      message: "Error in registration",
+      error: error.message,
+    });
+  }
 };
+
 
 //update user profile
 export const updateUserProfileController = async (req, res) => {
