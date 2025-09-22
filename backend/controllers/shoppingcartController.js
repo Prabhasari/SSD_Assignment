@@ -164,30 +164,37 @@ export const deleteCartItem = async (req, res) => {
 
 //delete cart details after success the payment, this part belongs to kavin
 export const deleteAllCartItem = async (req, res) => {
-    try {
-        // Sanitize the email to prevent NoSQL injection
-        const email = sanitize(req.params.email);
-
-        if (!email) {
-            return res.status(400).json({
-                success: false,
-                message: "Email is required",
-            });
-        }
-
-        // Delete all cart items for the sanitized email
-        await Cart.deleteMany({ email });
-
-        res.status(200).json({
-            success: true,
-            message: "All cart items deleted successfully",
-        });
-    } catch (error) {
-        console.error("Error deleting cart items:", error);
-        res.status(500).json({
-            success: false,
-            message: "Error while deleting cart items",
-            error: error.message,
-        });
+  try {
+    // Sanitize and validate email
+    const email = sanitize(String(req.params.email));
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required",
+      });
     }
+
+    // Validate proper email format
+    if (!validator.isEmail(email)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid email format",
+      });
+    }
+
+    // Safe deletion using $eq to avoid NoSQL injection
+    const result = await Cart.deleteMany({ email: { $eq: email } });
+
+    res.status(200).json({
+      success: true,
+      message: `Deleted ${result.deletedCount} cart items successfully`,
+    });
+  } catch (error) {
+    console.error("Error deleting cart items:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error while deleting cart items",
+      error: error.message,
+    });
+  }
 };
