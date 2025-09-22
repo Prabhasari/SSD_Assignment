@@ -2,50 +2,46 @@ import Cart from '../models/shoppingcartModel.js';
 import sanitize from "mongo-sanitize";
 
 //Add to cart 
-
-export const addToCart = async (req,res) => {
+export const addToCart = async (req, res) => {
     try {
-        const{product, quantity,email } =req.body
-        //validation
-        if(!product){
-            return res.send({message:'product is Required'});
-        }
-        if(!quantity){
-            return res.send({message:'quantity is Required'});
-        }
-        
-        if(!email){
-            return res.send({message:'email is Required'});
-        }
-        //check cart
-        const exisitingcart = await Cart.findOne({product,email});
+        // Sanitize inputs to prevent NoSQL injection
+        const product = sanitize(req.body.product);
+        const email = sanitize(req.body.email);
+        const quantity = Number(req.body.quantity);
 
-        //exisit cart
-        if(exisitingcart){
-            return res.status(200).send({
-                success:false,
-                message:'This item is alradey added',
+        // Validation
+        if (!product) return res.status(400).json({ success: false, message: 'Product is required' });
+        if (!email) return res.status(400).json({ success: false, message: 'Email is required' });
+        if (!quantity || isNaN(quantity) || quantity <= 0) return res.status(400).json({ success: false, message: 'Valid quantity is required' });
+
+        // Check if item already exists in the cart
+        const existingCart = await Cart.findOne({ product, email });
+        if (existingCart) {
+            return res.status(200).json({
+                success: false,
+                message: 'This item is already added to the cart',
             });
         }
-        //save
-        const cart = await new Cart({product, quantity,email}).save();
 
-        res.status(201).send({
-            success:true,
-            message:'Cart Entered Successfully',
-            cart
+        // Save to database
+        const cart = await new Cart({ product, quantity, email }).save();
+
+        res.status(201).json({
+            success: true,
+            message: 'Cart item added successfully',
+            cart,
         });
 
-    }catch (error) {
+    } catch (error) {
         console.error('Error adding to cart:', error);
-
-        res.status(500).send({
+        res.status(500).json({
             success: false,
-            message: 'Error in details entering',
-            error
+            message: 'Error while adding to cart',
+            error: error.message,
         });
     }
 };
+
 
 
 
@@ -167,20 +163,31 @@ export const deleteCartItem = async (req, res) => {
 
 
 //delete cart details after success the payment, this part belongs to kavin
-export const deleteAllCartItem = async (req, res) =>{
+export const deleteAllCartItem = async (req, res) => {
     try {
-        const { email } = req.params;
+        // Sanitize the email to prevent NoSQL injection
+        const email = sanitize(req.params.email);
+
+        if (!email) {
+            return res.status(400).json({
+                success: false,
+                message: "Email is required",
+            });
+        }
+
+        // Delete all cart items for the sanitized email
         await Cart.deleteMany({ email });
-        res.status(200).send({
+
+        res.status(200).json({
             success: true,
-            message: "Cart Details Deleted Successfully",
+            message: "All cart items deleted successfully",
         });
     } catch (error) {
-        console.log(error);
-        res.status(500).send({
+        console.error("Error deleting cart items:", error);
+        res.status(500).json({
             success: false,
-            message: "error while deleting Card Details",
-            error,
+            message: "Error while deleting cart items",
+            error: error.message,
         });
     }
 };
