@@ -80,9 +80,9 @@ export const getWishlist = async(req, res) =>{
 export const deleteWishlistItem = async (req, res) => {
     try {
         // Sanitize the ID to prevent NoSQL injection
-        const id = sanitize(req.params.id);
+        const id = sanitize(String(req.params.id));
 
-        // Validate that it's a valid MongoDB ObjectId
+        // Validate MongoDB ObjectId
         if (!id.match(/^[0-9a-fA-F]{24}$/)) {
             return res.status(400).send({
                 success: false,
@@ -90,14 +90,22 @@ export const deleteWishlistItem = async (req, res) => {
             });
         }
 
-        await Wishlist.findByIdAndDelete(id);
+        // Attempt to delete the wishlist item
+        const deletedItem = await Wishlist.findByIdAndDelete(id);
+
+        if (!deletedItem) {
+            return res.status(404).send({
+                success: false,
+                message: "Wishlist item not found",
+            });
+        }
 
         res.status(200).send({
             success: true,
             message: "Wishlist item deleted successfully",
         });
     } catch (error) {
-        console.log(error);
+        console.error(error);
         res.status(500).send({
             success: false,
             message: "Error while deleting wishlist item",
