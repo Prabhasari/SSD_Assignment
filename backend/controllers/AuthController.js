@@ -70,49 +70,71 @@ export const userRegisterController = async (req, res) => {
 
 //update user profile
 export const updateUserProfileController = async (req, res) => {
-    try {
-      const { fullname, email, dob, phone, address, password } = req.body;
-      const user = await userModel.findById(req.user._id);
-  
-      // Validate password length
-      if (password && password.length < 8) {
-        return res.json({ error: "Password is required and must be at least 8 characters long" });
-      }
-  
-      // Hash the new password if provided
-      const hashedPassword = password ? await hashPassword(password) : undefined;
-  
-      // Update user details
-      const updatedUser = await userModel.findByIdAndUpdate(
-        req.user._id,
-        {
-          fullname: fullname || user.fullname,
-          email: email || user.email,
-          dob: dob || user.dob,
-          phone: phone || user.phone,
-          address: address || user.address,
-          password: hashedPassword || user.password,
-        },
-        { new: true }
-      );
-  
-      res.status(200).send({
-        success: true,
-        message: "Profile updated successfully",
-        updatedUser,
-      });
-    } catch (error) {
-      console.log(error);
-      res.status(400).send({
+  try {
+    // Sanitize user ID
+    const userId = sanitize(String(req.user._id));
+
+    // Validate MongoDB ObjectId
+    if (!userId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).send({
         success: false,
-        message: "Error while updating data",
-        error,
+        message: "Invalid user ID",
       });
     }
-  };
-  
 
-  // Shop Registration Controller
+    const { fullname, email, dob, phone, address, password } = req.body;
+
+    // Fetch the current user
+    const user = await userModel.findById(userId);
+    if (!user) {
+      return res.status(404).send({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Validate password length
+    if (password && password.length < 8) {
+      return res.status(400).send({ 
+        success: false,
+        message: "Password must be at least 8 characters long" 
+      });
+    }
+
+    // Hash the new password if provided
+    const hashedPassword = password ? await hashPassword(password) : undefined;
+
+    // Update user details
+    const updatedUser = await userModel.findByIdAndUpdate(
+      userId,
+      {
+        fullname: fullname || user.fullname,
+        email: email || user.email,
+        dob: dob || user.dob,
+        phone: phone || user.phone,
+        address: address || user.address,
+        password: hashedPassword || user.password,
+      },
+      { new: true }
+    );
+
+    res.status(200).send({
+      success: true,
+      message: "Profile updated successfully",
+      updatedUser,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({
+      success: false,
+      message: "Error while updating profile",
+      error,
+    });
+  }
+};
+
+
+// Shop Registration Controller
   export const shopRegisterController = async (req, res) => {
     try {
       const {
@@ -428,34 +450,46 @@ export const deleteUserProfileController = async (req, res) => {
 
 //delete shop profile
 export const deleteShopProfileController = async (req, res) => {
-    try {
-      
-      // Check if user exists
-      const user = await shopModel.findById(req.user._id);
-      if (!user) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Shop not found" });
-      }
-  
-      // Delete the user
-      await shopModel.findByIdAndDelete(user._id);
-  
-      res
-        .status(200)
-        .json({ success: true, message: "Shop deleted successfully" });
-    } catch (error) {
-      console.error("Error deleting shop:", error);
-      res.status(500).json({
+  try {
+    // Sanitize the user/shop ID
+    const shopId = sanitize(String(req.user._id));
+
+    // Validate that it's a valid MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(shopId)) {
+      return res.status(400).json({
         success: false,
-        message: "Failed to delete shop",
-        error: error.message,
+        message: "Invalid shop ID",
       });
     }
-  };
+
+    // Check if the shop exists
+    const shop = await shopModel.findById(shopId);
+    if (!shop) {
+      return res.status(404).json({
+        success: false,
+        message: "Shop not found",
+      });
+    }
+
+    // Delete the shop
+    await shopModel.findByIdAndDelete(shopId);
+
+    res.status(200).json({
+      success: true,
+      message: "Shop deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting shop:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete shop",
+      error: error.message,
+    });
+  }
+};
   
 
-  export const forgotPasswordController = async (req, res) => {
+export const forgotPasswordController = async (req, res) => {
     try {
       const { email, newPassword, re_Password } = req.body;
   
