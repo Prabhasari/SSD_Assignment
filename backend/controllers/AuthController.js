@@ -5,42 +5,39 @@ import JWT from "jsonwebtoken";
 import sanitize from "mongo-sanitize";
 import { z } from "zod";
 
-// Zod schema for registration validation
-const registerSchema = z.object({
-  fullname: z.string().min(1, "Full name is required"),
-  email: z.string().email("Invalid email format"),
-  dob: z.string().min(1, "Date of birth is required"), // adjust type if you want Date
-  phone: z.string().min(10, "Phone number is required"),
-  address: z.string().min(1, "Residential address is required"),
-  shoppingPreference: z.string().optional(),
-  password: z.string().min(8, "Password must be at least 8 characters"),
-});
-
-// ==================== REGISTER USER ====================
+// Register user
 export const userRegisterController = async (req, res) => {
   try {
-    // ✅ validate input
-    const parsed = registerSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ errors: parsed.error.errors });
-    }
+    // Sanitize incoming body fields
+    const fullname = sanitize(req.body.fullname);
+    const email = sanitize(req.body.email);
+    const dob = sanitize(req.body.dob);
+    const phone = sanitize(req.body.phone);
+    const address = sanitize(req.body.address);
+    const shoppingPreference = sanitize(req.body.shoppingPreference);
+    const password = sanitize(req.body.password);
 
-    const { fullname, email, dob, phone, address, shoppingPreference, password } = parsed.data;
+    // Basic validation
+    if (!fullname) return res.status(400).json({ success: false, message: "Full name is required" });
+    if (!email) return res.status(400).json({ success: false, message: "Email is required" });
+    if (!dob) return res.status(400).json({ success: false, message: "Date of birth is required" });
+    if (!phone) return res.status(400).json({ success: false, message: "Phone number is required" });
+    if (!address) return res.status(400).json({ success: false, message: "Residential address is required" });
+    if (!password) return res.status(400).json({ success: false, message: "Password is required" });
 
-    // ✅ check if user already exists (safe query)
+    // Check if user already exists
     const existingUser = await userModel.findOne({ email: { $eq: email } });
-
     if (existingUser) {
-      return res.status(409).send({
+      return res.status(409).json({
         success: false,
-        message: "Already registered customer, please login",
+        message: "Already registered. Please login.",
       });
     }
 
-    // ✅ hash password
+    // Hash password
     const hashedPassword = await hashPassword(password);
 
-    // ✅ save user
+    // Save new user
     const user = await new userModel({
       fullname,
       email,
@@ -51,21 +48,29 @@ export const userRegisterController = async (req, res) => {
       password: hashedPassword,
     }).save();
 
-    res.status(201).send({
+    res.status(201).json({
       success: true,
       message: "User registered successfully",
-      user,
+      user: {
+        id: user._id,
+        fullname: user.fullname,
+        email: user.email,
+        dob: user.dob,
+        phone: user.phone,
+        address: user.address,
+        shoppingPreference: user.shoppingPreference,
+      },
     });
-
   } catch (error) {
-    console.error(error);
-    res.status(500).send({
+    console.error("Registration error:", error);
+    res.status(500).json({
       success: false,
-      message: "Error in registration",
+      message: "Error during registration",
       error: error.message,
     });
   }
 };
+
 
 
 //update user profile
