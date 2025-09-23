@@ -1,124 +1,140 @@
 import { comparePassword, hashPassword } from "../helpers/AuthHelper.js";
 import shopModel from "../models/shopModel.js";
 import userModel from "../models/userModel.js";
-import JWT from "jsonwebtoken"
+import JWT from "jsonwebtoken";
+import sanitize from "mongo-sanitize";
+import { z } from "zod";
 
-//register user
-export const userRegisterController = async(req,res) => {
-    try{
-        const {fullname,
-               email,
-               dob,
-               phone,
-               address,
-               shoppingPreference,
-               password
-            } = req.body
+// Zod schema for registration validation
+const registerSchema = z.object({
+  fullname: z.string().min(1, "Full name is required"),
+  email: z.string().email("Invalid email format"),
+  dob: z.string().min(1, "Date of birth is required"), // adjust type if you want Date
+  phone: z.string().min(10, "Phone number is required"),
+  address: z.string().min(1, "Residential address is required"),
+  shoppingPreference: z.string().optional(),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
 
-    //validation
-    if (!fullname) {
-        return res.send({ message: "Full name name is Required" });
-    }
-    if (!email) {
-        return res.send({ message: "Email is Required" });
-    }
-    if (!dob) {
-        return res.send({ message: "DOB is Required" });
-    }
-    if (!phone) {
-        return res.send({ message: "Phone Number is Required" });
-    }
-    if (!address) {
-        return res.send({ message: "Residential Address is Required" });
-    }
-    if (!password) {
-        return res.send({ message: "Password is Required" });
-    }
-    //check user
-    const existingUser = await userModel.findOne({email})
-
-    //existing user
-    if(existingUser){
-        return res.status(200).send({
-            success:false,
-            message:'Already Registered customer,Please login'
-        })
+// ==================== REGISTER USER ====================
+export const userRegisterController = async (req, res) => {
+  try {
+    // ✅ validate input
+    const parsed = registerSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ errors: parsed.error.errors });
     }
 
-    //register user
-    const hashedPassword = await hashPassword(password)
-    //save
+    const { fullname, email, dob, phone, address, shoppingPreference, password } = parsed.data;
+
+    // ✅ check if user already exists (safe query)
+    const existingUser = await userModel.findOne({ email: { $eq: email } });
+
+    if (existingUser) {
+      return res.status(409).send({
+        success: false,
+        message: "Already registered customer, please login",
+      });
+    }
+
+    // ✅ hash password
+    const hashedPassword = await hashPassword(password);
+
+    // ✅ save user
     const user = await new userModel({
-        fullname,
-        email,
-        dob,
-        phone,
-        address,
-        shoppingPreference,
-        password:hashedPassword
-    }).save()
+      fullname,
+      email,
+      dob,
+      phone,
+      address,
+      shoppingPreference,
+      password: hashedPassword,
+    }).save();
 
     res.status(201).send({
-        success: true,
-        message: "User Register Successfully",
-        user,
-    })
+      success: true,
+      message: "User registered successfully",
+      user,
+    });
 
-    }catch(error){
-        console.log(error)
-        res.status(500).send({
-            success:false,
-            message:'Error in Registration',
-            error
-        })
-    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({
+      success: false,
+      message: "Error in registration",
+      error: error.message,
+    });
+  }
 };
+
 
 //update user profile
 export const updateUserProfileController = async (req, res) => {
-    try {
-      const { fullname, email, dob, phone, address, password } = req.body;
-      const user = await userModel.findById(req.user._id);
-  
-      // Validate password length
-      if (password && password.length < 8) {
-        return res.json({ error: "Password is required and must be at least 8 characters long" });
-      }
-  
-      // Hash the new password if provided
-      const hashedPassword = password ? await hashPassword(password) : undefined;
-  
-      // Update user details
-      const updatedUser = await userModel.findByIdAndUpdate(
-        req.user._id,
-        {
-          fullname: fullname || user.fullname,
-          email: email || user.email,
-          dob: dob || user.dob,
-          phone: phone || user.phone,
-          address: address || user.address,
-          password: hashedPassword || user.password,
-        },
-        { new: true }
-      );
-  
-      res.status(200).send({
-        success: true,
-        message: "Profile updated successfully",
-        updatedUser,
-      });
-    } catch (error) {
-      console.log(error);
-      res.status(400).send({
+  try {
+    // Sanitize user ID
+    const userId = sanitize(String(req.user._id));
+
+    // Validate MongoDB ObjectId
+    if (!userId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).send({
         success: false,
-        message: "Error while updating data",
-        error,
+        message: "Invalid user ID",
       });
     }
-  };
-  
 
-  // Shop Registration Controller
+    const { fullname, email, dob, phone, address, password } = req.body;
+
+    // Fetch the current user
+    const user = await userModel.findById(userId);
+    if (!user) {
+      return res.status(404).send({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Validate password length
+    if (password && password.length < 8) {
+      return res.status(400).send({ 
+        success: false,
+        message: "Password must be at least 8 characters long" 
+      });
+    }
+
+    // Hash the new password if provided
+    const hashedPassword = password ? await hashPassword(password) : undefined;
+
+    // Update user details
+    const updatedUser = await userModel.findByIdAndUpdate(
+      userId,
+      {
+        fullname: fullname || user.fullname,
+        email: email || user.email,
+        dob: dob || user.dob,
+        phone: phone || user.phone,
+        address: address || user.address,
+        password: hashedPassword || user.password,
+      },
+      { new: true }
+    );
+
+    res.status(200).send({
+      success: true,
+      message: "Profile updated successfully",
+      updatedUser,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({
+      success: false,
+      message: "Error while updating profile",
+      error,
+    });
+  }
+};
+
+
+// Shop Registration Controller
   export const shopRegisterController = async (req, res) => {
     try {
       const {
@@ -182,134 +198,170 @@ export const updateUserProfileController = async (req, res) => {
       });
     }
   };
-  
 
-//login for customer,user and admin  
+
+// Zod schema for login validation
+const loginSchema = z.object({
+  email: z.string().email("Invalid email format"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
+
+// ==================== LOGIN ====================
 export const userLoginController = async (req, res) => {
-  
-    try {
-      const { email, password } = req.body;
-  
-      // Validate input
-      if (!email || !password) {
-        return res.status(400).send({ success: false, message: "Email and password are required" });
-      }
-  
-      // Check in users table
-      let user = await userModel.findOne({ email });
-      if (user) {
-        const match = await comparePassword(password, user.password);
-        if (match) {
-          const token = JWT.sign({ _id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "7d" });
-          return res.status(200).send({
-            success: true,
-            message: "Login successful",
-            token,
-            role: user.role,
-            user,
-          });
-        }
-      }
-  
-      // Check in shops table
-      let shop = await shopModel.findOne({ email });
-      if (shop) {
-        const match = await comparePassword(password, shop.password);
-        if (match) {
-          const token = JWT.sign({ _id: shop._id, role: 2 }, process.env.JWT_SECRET, { expiresIn: "7d" });
-          return res.status(200).send({
-            success: true,
-            message: "Shop owner login successful",
-            token,
-            role: 2,
-            shop,
-          });
-        }
-      }
-  
-      // If no match found
-      return res.status(400).send({ success: false, message: "Invalid email or password" });
-      
-    } catch (error) {
-      console.error("Login error:", error);
-      return res.status(500).send({ success: false, message: "Error during login", error });
+  try {
+    // validate input
+    const parsed = loginSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, errors: parsed.error.errors });
     }
-  };
-  
 
+    const { email, password } = parsed.data;
 
-
-//update shop details
-  export const updateShopProfileController = async (req, res) => {
-    try {
-      const {
-        fullname,
-        owner_email,
-        owner_contact,
-        password,
-        nic,
-        businessregno,
-        tax_id_no,
-        shopname,
-        email,
-        businesstype,
-        category,
-        description,
-        operating_hrs_from,
-        operating_hrs_to,
-        shoplocation,
-        shopcontact,
-      } = req.body;
-  
-      // Find the shop by the owner's ID
-      const shop = await shopModel.findById(req.user._id);
-  
-      // Validate password length
-      if (password && password.length < 8) {
-        return res.json({ error: "Password is required and must be at least 8 characters long" });
+    // safe query for user
+    const user = await userModel.findOne({ email: { $eq: email } });
+    if (user) {
+      const match = await comparePassword(password, user.password);
+      if (match) {
+        const token = JWT.sign(
+          { _id: user._id, role: user.role },
+          process.env.JWT_SECRET,
+          { expiresIn: "7d" }
+        );
+        return res.status(200).send({
+          success: true,
+          message: "Login successful",
+          token,
+          role: user.role,
+          user,
+        });
       }
-  
-      // Hash the new password if provided
-      const hashedPassword = password ? await hashPassword(password) : undefined;
-  
-      // Update shop details
-      const updatedShop = await shopModel.findByIdAndUpdate(
-        req.user._id,
-        {
-          fullname: fullname || shop.fullname,
-          owner_email: owner_email || shop.owner_email,
-          owner_contact: owner_contact || shop.owner_contact,
-          password: hashedPassword || shop.password,
-          nic: nic || shop.nic,
-          businessregno: businessregno || shop.businessregno,
-          tax_id_no: tax_id_no || shop.tax_id_no,
-          shopname: shopname || shop.shopname,
-          email: email || shop.email,
-          businesstype: businesstype || shop.businesstype,
-          category: category || shop.category,
-          description: description || shop.description,
-          operating_hrs_from: operating_hrs_from || shop.operating_hrs_from,
-          operating_hrs_to: operating_hrs_to || shop.operating_hrs_to,
-          shoplocation: shoplocation || shop.shoplocation,
-          shopcontact: shopcontact || shop.shopcontact,
-        },
-        { new: true }
-      );
-  
-      res.status(200).send({
-        success: true,
-        message: "Profile updated successfully",
-        updatedShop,
-      });
-    } catch (error) {
-      console.log(error);
-      res.status(400).send({
+    }
+
+    // safe query for shop
+    const shop = await shopModel.findOne({ email: { $eq: email } });
+    if (shop) {
+      const match = await comparePassword(password, shop.password);
+      if (match) {
+        const token = JWT.sign(
+          { _id: shop._id, role: 2 }, // assuming role 2 = shop owner
+          process.env.JWT_SECRET,
+          { expiresIn: "7d" }
+        );
+        return res.status(200).send({
+          success: true,
+          message: "Shop owner login successful",
+          token,
+          role: 2,
+          shop,
+        });
+      }
+    }
+
+    // no match
+    return res.status(400).send({ success: false, message: "Invalid email or password" });
+
+  } catch (error) {
+    console.error("Login error:", error);
+    return res.status(500).send({
+      success: false,
+      message: "Error during login",
+      error: error.message,
+    });
+  }
+};
+
+
+
+export const updateShopProfileController = async (req, res) => {
+  try {
+    // Sanitize the user/shop ID
+    const shopId = sanitize(String(req.user._id));
+
+    // Validate that it's a valid MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(shopId)) {
+      return res.status(400).json({
         success: false,
-        message: "Error while updating data",
-        error,
+        message: "Invalid shop ID",
       });
     }
-  };
+
+    const {
+      fullname,
+      owner_email,
+      owner_contact,
+      password,
+      nic,
+      businessregno,
+      tax_id_no,
+      shopname,
+      email,
+      businesstype,
+      category,
+      description,
+      operating_hrs_from,
+      operating_hrs_to,
+      shoplocation,
+      shopcontact,
+    } = req.body;
+
+    // Find the shop by ID
+    const shop = await shopModel.findById(shopId);
+    if (!shop) {
+      return res.status(404).json({
+        success: false,
+        message: "Shop not found",
+      });
+    }
+
+    // Validate password length if provided
+    if (password && password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 8 characters long",
+      });
+    }
+
+    // Hash the new password if provided
+    const hashedPassword = password ? await hashPassword(password) : shop.password;
+
+    // Update shop details
+    const updatedShop = await shopModel.findByIdAndUpdate(
+      shopId,
+      {
+        fullname: fullname || shop.fullname,
+        owner_email: owner_email || shop.owner_email,
+        owner_contact: owner_contact || shop.owner_contact,
+        password: hashedPassword,
+        nic: nic || shop.nic,
+        businessregno: businessregno || shop.businessregno,
+        tax_id_no: tax_id_no || shop.tax_id_no,
+        shopname: shopname || shop.shopname,
+        email: email || shop.email,
+        businesstype: businesstype || shop.businesstype,
+        category: category || shop.category,
+        description: description || shop.description,
+        operating_hrs_from: operating_hrs_from || shop.operating_hrs_from,
+        operating_hrs_to: operating_hrs_to || shop.operating_hrs_to,
+        shoplocation: shoplocation || shop.shoplocation,
+        shopcontact: shopcontact || shop.shopcontact,
+      },
+      { new: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      updatedShop,
+    });
+  } catch (error) {
+    console.error("Error updating shop profile:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error while updating shop profile",
+      error: error.message,
+    });
+  }
+};
   
 
 //get all shops
@@ -354,118 +406,136 @@ export const testcontroller = (req,res) => {
     res.send("Protected route");
 }
 
-
 //delete user profile
 export const deleteUserProfileController = async (req, res) => {
-    try {
-  
-      // Check if user exists
-      const user = await userModel.findById(req.user._id);
-      if (!user) {
-        return res
-          .status(404)
-          .json({ success: false, message: "User not found" });
-      }
-  
-      // Delete the user
-      await userModel.findByIdAndDelete(user._id);
-  
-      // Optionally, perform any additional cleanup or related actions here
-  
-      res
-        .status(200)
-        .json({ success: true, message: "User deleted successfully" });
-    } catch (error) {
-      console.error("Error deleting user:", error);
-      res.status(500).json({
+  try {
+    // Sanitize and cast the user ID
+    const userId = sanitize(String(req.user._id));
+
+    // Validate MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
         success: false,
-        message: "Failed to delete user",
-        error: error.message,
+        message: "Invalid user ID",
       });
     }
-  };
+
+    // Check if user exists
+    const user = await userModel.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Delete the user safely
+    await userModel.findByIdAndDelete(userId);
+
+    // Optional: Delete related data (orders, cart, wishlist) here
+
+    return res.status(200).json({
+      success: true,
+      message: "User deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting user:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete user",
+      error: error.message,
+    });
+  }
+};
+
   
 
-
-
-  //delete shop profile
+//delete shop profile
 export const deleteShopProfileController = async (req, res) => {
-    try {
-      
-      // Check if user exists
-      const user = await shopModel.findById(req.user._id);
-      if (!user) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Shop not found" });
-      }
-  
-      // Delete the user
-      await shopModel.findByIdAndDelete(user._id);
-  
-      res
-        .status(200)
-        .json({ success: true, message: "Shop deleted successfully" });
-    } catch (error) {
-      console.error("Error deleting shop:", error);
-      res.status(500).json({
+  try {
+    // Sanitize the user/shop ID
+    const shopId = sanitize(String(req.user._id));
+
+    // Validate that it's a valid MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(shopId)) {
+      return res.status(400).json({
         success: false,
-        message: "Failed to delete shop",
-        error: error.message,
+        message: "Invalid shop ID",
       });
     }
-  };
-  
 
-  export const forgotPasswordController = async (req, res) => {
-    try {
-      const { email, newPassword, re_Password } = req.body;
-  
-      // Validate input fields
-      if (!email) {
-        return res.status(400).send({ message: 'Email is required' });
-      }
-      if (!newPassword) {
-        return res.status(400).send({ message: 'New password is required' });
-      }
-      if (!re_Password) {
-        return res.status(400).send({ message: 'Please confirm your new password' });
-      }
-      if (newPassword !== re_Password) {
-        return res.status(400).send({ message: 'Passwords do not match' });
-      }
-  
-      // Check if the user exists
-      const user = await userModel.findOne({ email });
-      if (!user) {
-        return res.status(404).send({
-          success: false,
-          message: "User with this email does not exist",
-        });
-      }
-  
-      // Hash the new password
-      const hashedPassword = await hashPassword(newPassword);
-  
-      // Update the user's password
-      await userModel.findByIdAndUpdate(user._id, { password: hashedPassword });
-  
-      return res.status(200).send({
-        success: true,
-        message: "Password reset successfully",
-      });
-    } catch (error) {
-      console.log(error);
-      return res.status(500).send({
+    // Check if the shop exists
+    const shop = await shopModel.findById(shopId);
+    if (!shop) {
+      return res.status(404).json({
         success: false,
-        message: 'Something went wrong',
-        error: error.message,  // More descriptive error message
+        message: "Shop not found",
       });
     }
-  };
+
+    // Delete the shop
+    await shopModel.findByIdAndDelete(shopId);
+
+    res.status(200).json({
+      success: true,
+      message: "Shop deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting shop:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete shop",
+      error: error.message,
+    });
+  }
+};
   
 
-  // Controller to get total user and shop count
+export const forgotPasswordController = async (req, res) => {
+  try {
+    const { email, newPassword, re_Password } = req.body;
+
+    // Validate input fields
+    if (!email) return res.status(400).send({ message: 'Email is required' });
+    if (!newPassword) return res.status(400).send({ message: 'New password is required' });
+    if (!re_Password) return res.status(400).send({ message: 'Please confirm your new password' });
+    if (newPassword !== re_Password) return res.status(400).send({ message: 'Passwords do not match' });
+
+    // Sanitize email to prevent NoSQL injection
+    const sanitizedEmail = sanitize(email);
+
+    // Check if the user exists
+    const user = await userModel.findOne({ email: { $eq: sanitizedEmail } });
+    if (!user) {
+      return res.status(404).send({
+        success: false,
+        message: "User with this email does not exist",
+      });
+    }
+
+    // Hash the new password
+    const hashedPassword = await hashPassword(newPassword);
+
+    // Update the user's password
+    await userModel.findByIdAndUpdate(user._id, { password: hashedPassword });
+
+    return res.status(200).send({
+      success: true,
+      message: "Password reset successfully",
+    });
+
+  } catch (error) {
+    console.error("Forgot password error:", error);
+    return res.status(500).send({
+      success: false,
+      message: 'Something went wrong',
+      error: error.message,
+    });
+  }
+};
+
+  
+// Controller to get total user and shop count
 export const getTotalUserCountController = async (req, res) => {
   try {
       // Get the total count of users

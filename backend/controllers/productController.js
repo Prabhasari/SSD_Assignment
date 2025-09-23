@@ -2,6 +2,7 @@ import { error } from "console";
 import productModel from "../models/productModel.js";
 import fs from 'fs'
 import slugify from 'slugify';
+import sanitize from "mongo-sanitize";
 
 // create product
 export const createProductController = async (req,res) => {
@@ -132,84 +133,103 @@ export const productPhotoController = async (req,res) => {
 };
 
 
-// delete product
-export const deleteProductController = async (req,res) => {
+export const deleteProductController = async (req, res) => {
     try {
-        await productModel.findByIdAndDelete(req.params.pid).select("-photo")
+        // Sanitize the ID to prevent NoSQL injection
+        const pid = sanitize(String(req.params.pid));
+
+        // Validate MongoDB ObjectId format
+        if (!pid.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(400).send({
+                success: false,
+                message: "Invalid product ID",
+            });
+        }
+
+        // Find and delete the product
+        const deletedProduct = await productModel.findByIdAndDelete(pid).select("-photo");
+
+        if (!deletedProduct) {
+            return res.status(404).send({
+                success: false,
+                message: "Product not found",
+            });
+        }
+
         res.status(200).send({
-            success:true,
-            message:'Product Deleted Successfully'
-        })
+            success: true,
+            message: "Product deleted successfully",
+        });
     } catch (error) {
-        console.log(error)
+        console.error(error);
         res.status(500).send({
-            success:false,
-            message:'Error while deleting product',
-            error
-        })
+            success: false,
+            message: "Error while deleting product",
+            error,
+        });
     }
 };
 
 
-// update product
-export const updateProductController = async (req,res) => {
+export const updateProductController = async (req, res) => {
     try {
-        const {name,slug,description,price,category,quantity,shipping,reorderLevel} = req.fields
-        const {photo} = req.files
-        //validation
+        const { name, description, price, category, quantity, shipping, reorderLevel } = req.fields;
+        const photo = req.files?.photo;
+
+        // Validation
         switch(true){
             case !name:
-                return res.status(500).send({error:'Name is Required'})
+                return res.status(400).send({ error: 'Name is Required' });
             case !description:
-                return res.status(500).send({error:'Description is Required'})
+                return res.status(400).send({ error: 'Description is Required' });
             case !price:
-                return res.status(500).send({error:'Price is Required'})
+                return res.status(400).send({ error: 'Price is Required' });
             case !category:
-                return res.status(500).send({error:'Category is Required'})
+                return res.status(400).send({ error: 'Category is Required' });
             case !quantity:
-                return res.status(500).send({error:'Quantity is Required'})
+                return res.status(400).send({ error: 'Quantity is Required' });
             case reorderLevel !== undefined && isNaN(reorderLevel):
-                return res.status(500).send({ error: 'Reorder Level should be a number' });
+                return res.status(400).send({ error: 'Reorder Level should be a number' });
             case photo && photo.size > 1000000:
-                return res.status(500).send({error:'Photo is Required and less than 1MB'})
+                return res.status(400).send({ error: 'Photo must be less than 1MB' });
         }
 
-        const products = await productModel.findByIdAndUpdate(req.params.pid, {...req.fields, slug:slugify(name)}, {new:true})
-        if(photo){
-            products.photo.data = fs.readFileSync(photo.path)
-            products.photo.contentType = photo.type
+        // Sanitize and validate product ID
+        const pid = sanitize(String(req.params.pid));
+        if (!mongoose.Types.ObjectId.isValid(pid)) {
+            return res.status(400).send({ success: false, message: "Invalid product ID" });
         }
-        await products.save()
-        res.status(201).send({
-            success:true,
-            message:'Product Updated Successfully',
-            products
-        })
+
+        // Update product
+        const updatedData = { ...req.fields, slug: slugify(name) };
+        const product = await productModel.findByIdAndUpdate(pid, updatedData, { new: true });
+
+        if (!product) {
+            return res.status(404).send({ success: false, message: "Product not found" });
+        }
+
+        // Handle photo upload
+        if (photo) {
+            product.photo.data = fs.readFileSync(photo.path);
+            product.photo.contentType = photo.mimetype;
+            await product.save();
+        }
+
+        res.status(200).send({
+            success: true,
+            message: "Product updated successfully",
+            product,
+        });
+
     } catch (error) {
-        console.log(error)
+        console.error("Error updating product:", error);
         res.status(500).send({
-            success:false,
+            success: false,
+            message: "Error updating product",
             error,
-            message:'Error in Update Product'
-        })
+        });
     }
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 // piyusha product filter part
@@ -304,18 +324,33 @@ export const getTotalProductCountController = async (req, res) => {
   };
 
 // piyusha mongodb update product quantity part
-
-
-//update product quantity this part belongs to piyusha
 export const updateProductQuantity = async (req, res) => {
     try {
-        const { quantity } = req.body; // Expecting the new quantity in the request body
-        const { pid } = req.params; // Getting product ID from the URL parameter
+        // Sanitize input
+        const quantity = sanitize(req.body.quantity);
+        const pid = sanitize(String(req.params.pid));
 
+        // Validate product ID
+        if (!mongoose.Types.ObjectId.isValid(pid)) {
+            return res.status(400).send({
+                success: false,
+                message: "Invalid product ID",
+            });
+        }
+
+        // Validate quantity
+        if (quantity === undefined || isNaN(quantity)) {
+            return res.status(400).send({
+                success: false,
+                message: "Quantity must be a valid number",
+            });
+        }
+
+        // Update product quantity
         const product = await productModel.findByIdAndUpdate(
             pid,
-            { quantity }, // Update quantity field
-            { new: true } // Return the updated document
+            { quantity },
+            { new: true }
         );
 
         if (!product) {
@@ -327,15 +362,15 @@ export const updateProductQuantity = async (req, res) => {
 
         res.status(200).send({
             success: true,
-            message: "Quantity Updated Successfully",
+            message: "Quantity updated successfully",
             product,
         });
     } catch (error) {
-        console.log(error);
+        console.error(error);
         res.status(500).send({
             success: false,
-            error,
             message: "Error while updating quantity",
+            error,
         });
     }
 };

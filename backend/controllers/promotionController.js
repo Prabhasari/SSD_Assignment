@@ -1,6 +1,7 @@
 import slugify from "slugify"
 import promotionModel from "../models/promotionModel.js"
 import fs from 'fs'
+import sanitize from "mongo-sanitize";
 
 export const createPromotionController = async(req,res) => {
     try{
@@ -90,26 +91,46 @@ export const getAllPromotionsController = async(req, res) => {
 };
 
 
+export const getSinglePromotionsController = async (req, res) => {
+    try {
+        // Sanitize input
+        const slug = sanitize(String(req.params.slug));
 
-//get single promotion
-export const getSinglePromotionsController = async(req,res) => {
-    try{
-        const promotion = await promotionModel.findOne({slug:req.params.slug}).populate('shop').select("-promotionImage")
+        // Optional: validate slug is not empty
+        if (!slug) {
+            return res.status(400).send({
+                success: false,
+                message: "Promotion slug is required",
+            });
+        }
+
+        // Fetch promotion safely
+        const promotion = await promotionModel
+            .findOne({ slug: { $eq: slug } }) // $eq blocks object injection
+            .populate("shop")
+            .select("-promotionImage");
+
+        if (!promotion) {
+            return res.status(404).send({
+                success: false,
+                message: "Promotion not found",
+            });
+        }
+
         res.status(200).send({
-            success:true,
-            message:"Single promotion fetched",
-            promotion
-        })
-    }
-    catch(error){
-        console.log(error)
+            success: true,
+            message: "Single promotion fetched",
+            promotion,
+        });
+    } catch (error) {
+        console.error(error);
         res.status(500).send({
-            success:false,
-            message:'Error while getting single promotion',
-            error
-        })
+            success: false,
+            message: "Error while getting single promotion",
+            error,
+        });
     }
-}
+};
 
 
 //get promotiom image
@@ -134,54 +155,87 @@ export const promotionImageController = async(req,res) => {
 //delete promotion
 export const deletePromotionController = async (req, res) => {
     try {
-        // Find the promotion by ID and delete it
-        await promotionModel.findByIdAndDelete(req.params.pid);
-        
-        // Send success response
+        // Sanitize the ID to prevent NoSQL injection
+        const pid = sanitize(String(req.params.pid));
+
+        // Validate MongoDB ObjectId format
+        if (!pid.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(400).send({
+                success: false,
+                message: "Invalid promotion ID",
+            });
+        }
+
+        // Find and delete the promotion
+        const deletedPromotion = await promotionModel.findByIdAndDelete(pid);
+
+        if (!deletedPromotion) {
+            return res.status(404).send({
+                success: false,
+                message: "Promotion not found",
+            });
+        }
+
         res.status(200).send({
             success: true,
-            message: "Promotion deleted successfully"
+            message: "Promotion deleted successfully",
         });
     } catch (error) {
         console.error(error);
-        
-        // Send error response
         res.status(500).send({
             success: false,
-            message: 'Error while deleting promotion',
-            error
+            message: "Error while deleting promotion",
+            error,
         });
     }
 };
 
-// Update promotion
+//update promotion
 export const updatePromotionController = async (req, res) => {
     try {
-        const promotion = await promotionModel.findByIdAndUpdate(req.params.pid, req.fields, {
-            new: true,
-        });
+        // Sanitize the ID to prevent NoSQL injection
+        const pid = sanitize(String(req.params.pid));
 
+        // Validate MongoDB ObjectId format
+        if (!pid.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(400).send({
+                success: false,
+                message: "Invalid promotion ID",
+            });
+        }
+
+        // Update the promotion
+        const promotion = await promotionModel.findByIdAndUpdate(pid, req.fields, { new: true });
+
+        if (!promotion) {
+            return res.status(404).send({
+                success: false,
+                message: "Promotion not found",
+            });
+        }
+
+        // Handle image upload
         if (req.files && req.files.promotionImage) {
             promotion.promotionImage.data = fs.readFileSync(req.files.promotionImage.path);
             promotion.promotionImage.contentType = req.files.promotionImage.type;
         }
 
         await promotion.save();
+
         res.status(200).send({
             success: true,
-            message: 'Promotion updated successfully',
+            message: "Promotion updated successfully",
             promotion,
         });
     } catch (error) {
         console.error(error);
         res.status(500).send({
             success: false,
-            message: 'Error while updating promotion',
+            message: "Error while updating promotion",
             error,
         });
     }
 };
-
 
 // Get promotions by shop
 export const getPromotionByShopController = async (req, res) => {

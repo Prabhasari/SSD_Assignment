@@ -1,52 +1,47 @@
 import Cart from '../models/shoppingcartModel.js';
-
-
+import sanitize from "mongo-sanitize";
 
 //Add to cart 
-
-export const addToCart = async (req,res) => {
+export const addToCart = async (req, res) => {
     try {
-        const{product, quantity,email } =req.body
-        //validation
-        if(!product){
-            return res.send({message:'product is Required'});
-        }
-        if(!quantity){
-            return res.send({message:'quantity is Required'});
-        }
-        
-        if(!email){
-            return res.send({message:'email is Required'});
-        }
-        //check cart
-        const exisitingcart = await Cart.findOne({product,email});
+        // Sanitize inputs to prevent NoSQL injection
+        const product = sanitize(req.body.product);
+        const email = sanitize(req.body.email);
+        const quantity = Number(req.body.quantity);
 
-        //exisit cart
-        if(exisitingcart){
-            return res.status(200).send({
-                success:false,
-                message:'This item is alradey added',
+        // Validation
+        if (!product) return res.status(400).json({ success: false, message: 'Product is required' });
+        if (!email) return res.status(400).json({ success: false, message: 'Email is required' });
+        if (!quantity || isNaN(quantity) || quantity <= 0) return res.status(400).json({ success: false, message: 'Valid quantity is required' });
+
+        // Check if item already exists in the cart
+        const existingCart = await Cart.findOne({ product: {$eq:product}, email: {$eq:email} });
+        if (existingCart) {
+            return res.status(200).json({
+                success: false,
+                message: 'This item is already added to the cart',
             });
         }
-        //save
-        const cart = await new Cart({product, quantity,email}).save();
 
-        res.status(201).send({
-            success:true,
-            message:'Cart Entered Successfully',
-            cart
+        // Save to database
+        const cart = await new Cart({ product, quantity, email }).save();
+
+        res.status(201).json({
+            success: true,
+            message: 'Cart item added successfully',
+            cart,
         });
 
-    }catch (error) {
+    } catch (error) {
         console.error('Error adding to cart:', error);
-
-        res.status(500).send({
+        res.status(500).json({
             success: false,
-            message: 'Error in details entering',
-            error
+            message: 'Error while adding to cart',
+            error: error.message,
         });
     }
 };
+
 
 
 
@@ -83,52 +78,84 @@ export const getCart = async(req, res) =>{
 
 
 //update card details
-export const updateCartItemQuantity = async (req,res) => {
+export const updateCartItemQuantity = async (req, res) => {
     try {
-        const {
-            product,
-            quantity
-            } = req.body;
-        const {id} = req.params;
+        const { product, quantity } = req.body;
+        
+        // Sanitize and convert ID to string
+        const id = sanitize(String(req.params.id));
+
+        // Validate MongoDB ObjectId
+        if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(400).send({
+                success: false,
+                message: "Invalid cart item ID",
+            });
+        }
+
+        // Update cart item
         const cart = await Cart.findByIdAndUpdate(
             id,
-            {product,quantity},
-            {new: true}
-            
+            { product, quantity },
+            { new: true }
         );
+
+        if (!cart) {
+            return res.status(404).send({
+                success: false,
+                message: "Cart item not found",
+            });
+        }
+
         res.status(200).send({
             success: true,
-            message: "quantity Updated Successfully",
+            message: "Quantity updated successfully",
             cart,
         });
-        
+
     } catch (error) {
-        console.log(error)
+        console.error(error);
         res.status(500).send({
-            success:false,
+            success: false,
+            message: "Error while updating cart quantity",
             error,
-            message:"Error while updating quantity"
-        })
-        
+        });
     }
 };
 
 
-
-//delete cart details
-export const deleteCartItem = async (req, res) =>{
+export const deleteCartItem = async (req, res) => {
     try {
-        const { id } = req.params;
-        await Cart.findByIdAndDelete(id);
+        // Sanitize the ID to prevent NoSQL injection
+        const id = sanitize(String(req.params.id));
+
+        // Validate MongoDB ObjectId format
+        if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+            return res.status(400).send({
+                success: false,
+                message: "Invalid cart item ID",
+            });
+        }
+
+        // Find and delete the cart item
+        const deletedItem = await Cart.findByIdAndDelete(id);
+
+        if (!deletedItem) {
+            return res.status(404).send({
+                success: false,
+                message: "Cart item not found",
+            });
+        }
+
         res.status(200).send({
             success: true,
-            message: "Cart Details Deleted Successfully",
+            message: "Cart item deleted successfully",
         });
     } catch (error) {
-        console.log(error);
+        console.error(error);
         res.status(500).send({
             success: false,
-            message: "error while deleting Card Details",
+            message: "Error while deleting cart item",
             error,
         });
     }
@@ -136,20 +163,38 @@ export const deleteCartItem = async (req, res) =>{
 
 
 //delete cart details after success the payment, this part belongs to kavin
-export const deleteAllCartItem = async (req, res) =>{
-    try {
-        const { email } = req.params;
-        await Cart.deleteMany({ email });
-        res.status(200).send({
-            success: true,
-            message: "Cart Details Deleted Successfully",
-        });
-    } catch (error) {
-        console.log(error);
-        res.status(500).send({
-            success: false,
-            message: "error while deleting Card Details",
-            error,
-        });
+export const deleteAllCartItem = async (req, res) => {
+  try {
+    // Sanitize and validate email
+    const email = sanitize(String(req.params.email));
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required",
+      });
     }
+
+    // Validate proper email format
+    if (!validator.isEmail(email)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid email format",
+      });
+    }
+
+    // Safe deletion using $eq to avoid NoSQL injection
+    const result = await Cart.deleteMany({ email: { $eq: email } });
+
+    res.status(200).json({
+      success: true,
+      message: `Deleted ${result.deletedCount} cart items successfully`,
+    });
+  } catch (error) {
+    console.error("Error deleting cart items:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error while deleting cart items",
+      error: error.message,
+    });
+  }
 };
