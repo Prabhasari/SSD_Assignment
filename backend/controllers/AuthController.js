@@ -26,7 +26,7 @@ export const userRegisterController = async (req, res) => {
     if (!password) return res.status(400).json({ success: false, message: "Password is required" });
 
     // Check if user already exists
-    const existingUser = await userModel.findOne({ email });
+    const existingUser = await userModel.findOne({ email: { $eq: email } });
     if (existingUser) {
       return res.status(409).json({
         success: false,
