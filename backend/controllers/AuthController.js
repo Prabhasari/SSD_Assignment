@@ -28,8 +28,10 @@ export const userRegisterController = async (req, res) => {
     if (!address) return res.status(400).json({ success: false, message: "Residential address is required" });
     if (!password) return res.status(400).json({ success: false, message: "Password is required" });
 
-    // Check if user already exists
-    const existingUser = await userModel.findOne({ email: { $eq: email } });
+    // Secure: sanitize input and enforce strict equality
+    const sanitizedEmail = sanitize(email);
+    const existingUser = await userModel.findOne({ email: { $eq: sanitizedEmail } });
+
     if (existingUser) {
       return res.status(409).json({
         success: false,
