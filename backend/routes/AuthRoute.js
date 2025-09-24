@@ -1,7 +1,34 @@
 import express from 'express'
-import { deleteShopProfileController,logoController, deleteUserProfileController, forgotPasswordController, getAllShopsController, getAllUsersController, getShopCountByCategoryController, getShopGrowthController, getTotalShopCountController, getTotalUserCountController, getUserGrowthController,shopRegisterController, testcontroller, updateShopProfileController, updateUserProfileController, userLoginController, userRegisterController } from '../controllers/AuthController.js'
-import { isAdmin, requireSignIn } from '../middlewares/AuthMiddleware.js'
 import multer from 'multer';
+import rateLimit from 'express-rate-limit';
+
+import {
+    // auth & account
+    userRegisterController,
+    userLoginController,
+    updateUserProfileController,
+    updateShopProfileController,
+    deleteUserProfileController,
+    deleteShopProfileController,
+    // listing / metrics
+    getAllShopsController,
+    getAllUsersController,
+    getTotalShopCountController,
+    getTotalUserCountController,
+    getUserGrowthController,
+    getShopGrowthController,
+    getShopCountByCategoryController,
+    // media
+    logoController,
+    // secure reset
+    requestPasswordReset,
+    performPasswordReset,
+    // misc
+    shopRegisterController,
+    testcontroller,
+} from '../controllers/AuthController.js';
+
+import { isAdmin, requireSignIn } from '../middlewares/AuthMiddleware.js'
 
 //router object
 const router = express.Router()
@@ -9,6 +36,23 @@ const router = express.Router()
 // Configure Multer to store the file in memory (not on disk)
 const storage = multer.memoryStorage(); // Store image as Buffer in memory
 const upload = multer({ storage: storage });
+
+// Rate limiters
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5, // limit each IP to 5 requests per windowMs
+    standardHeaders: true, 
+    handler: (req, res) => {
+        return res.status(429).json({ error: "Too many login attempts. Please try again later." });
+    }
+});
+
+const resetLimiter = rateLimit({
+    windowMs: 30 * 60 * 1000, // 30 minutes
+    max: 5, 
+    standardHeaders: true,
+    legacyHeaders: false,
+});
 
 //routing path
 //Register || post method
@@ -18,7 +62,7 @@ router.post('/userRegister',userRegisterController )
 router.post('/shopregister',upload.single('logo'),shopRegisterController )
 
 //login || post
-router.post('/userLogin',userLoginController )
+router.post('/userLogin',loginLimiter, userLoginController )
 
 // Route to get all shops
 router.get('/shops', getAllShopsController );
@@ -41,8 +85,12 @@ router.delete('/deleteShopProfile',requireSignIn,deleteShopProfileController )
 // Route to get all shops
 router.get('/users', getAllUsersController );
 
-//forgot password
-router.post('/forgot-password',forgotPasswordController )
+// //forgot password
+// router.post('/forgot-password',forgotPasswordController )
+
+// secure password reset flow (replaces /forgot-password) ***
+router.post('/auth/reset/request', resetLimiter, requestPasswordReset);
+router.post('/auth/reset/perform', resetLimiter, performPasswordReset);
 
 //get shop count
 router.get('/get-shopCount',getTotalShopCountController )
@@ -59,5 +107,6 @@ router.get('/get-shopGrowthData', getShopGrowthController );
 router.get('/get-shopCountByCategory', getShopCountByCategoryController );
 
 router.get('/logo/:pid', logoController );
+
 
 export default router
