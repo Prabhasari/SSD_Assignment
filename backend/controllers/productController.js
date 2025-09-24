@@ -3,6 +3,7 @@ import productModel from "../models/productModel.js";
 import fs from 'fs'
 import slugify from 'slugify';
 import sanitize from "mongo-sanitize";
+import path from "path";
 
 // create product
 export const createProductController = async (req,res) => {
@@ -31,9 +32,18 @@ export const createProductController = async (req,res) => {
 
         const products = new productModel({...req.fields, slug:slugify(name)})
         if(photo){
-            products.photo.data = fs.readFileSync(photo.path)
-            products.photo.contentType = photo.type
+            // Secure file path check
+            const uploadDir = path.resolve("uploads");
+            const safePath = path.resolve(photo.path);
+
+            if (!safePath.startsWith(uploadDir)) {
+                return res.status(400).send({ error: "Invalid file path" });
+            }
+
+            products.photo.data = fs.readFileSync(safePath);
+            products.photo.contentType = photo.type;
         }
+
         await products.save()
         res.status(201).send({
             success:true,
@@ -210,10 +220,18 @@ export const updateProductController = async (req, res) => {
 
         // Handle photo upload
         if (photo) {
-            product.photo.data = fs.readFileSync(photo.path);
-            product.photo.contentType = photo.mimetype;
-            await product.save();
+           const uploadDir = path.resolve("uploads");
+           const safePath = path.resolve(photo.path);
+
+        if (!safePath.startsWith(uploadDir)) {
+           return res.status(400).send({ error: "Invalid file path" });
         }
+
+        product.photo.data = fs.readFileSync(safePath);
+        product.photo.contentType = photo.mimetype;
+        await product.save();
+        }
+
 
         res.status(200).send({
             success: true,
