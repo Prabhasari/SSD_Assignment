@@ -72,7 +72,8 @@ router.get('/google/callback', passport.authenticate( "google", {
     (req,res) => {
         req.user.role = 0;
         req.user.email = req.user.emails[0].value;
-        req.user.fullname = req.user.name.givenName
+        req.user.fullname = req.user.displayName;
+        req.user.photo = req.user.photos[0].value;
         console.log(req.user);
         const token = jwt.sign({_id: req.user._id, role: req.user.role},
             process.env.JWT_SECRET, 
