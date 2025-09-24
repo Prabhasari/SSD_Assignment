@@ -19,6 +19,7 @@ const Header1 = () => {
         //     token: "",
         // });
         localStorage.removeItem('auth');
+        window.open(`${process.env.REACT_APP_API}/api/v1/authuser/logout`, "_self");
         // Redirect to the login page after logging out
         navigate('/login');
         window.location.reload();

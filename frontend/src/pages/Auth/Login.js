@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect  } from 'react';
 import Layout from '../../components/Layout/Layout';
 import axios from 'axios';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -12,6 +12,35 @@ const Login = () => {
     const navigate = useNavigate();
     const [auth, setAuth] = useAuth();
     const location = useLocation();
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const token = params.get("token");
+        const user = params.get("user");
+        console.log(params)
+        console.log("token",token)
+        console.log("user",user)
+
+    if (token && user) {
+        setAuth({
+            ...auth,
+            token,
+            user,
+        });
+
+        
+
+        localStorage.setItem(
+            "auth",
+            JSON.stringify({
+            token,
+            user: JSON.parse(decodeURIComponent(user)),
+        })
+    );
+
+      navigate("/"); // redirect to home/dashboard
+    }
+  }, [navigate]);
 
     const handleLoginClick = () => {
       navigate('/register'); // Redirect to the login page
@@ -55,7 +84,13 @@ const Login = () => {
             toast.error("Something went wrong");
         }
     };    
-    
+
+    const googleAuth = () => {
+        window.open(
+            `${process.env.REACT_APP_API}/api/v1/userauth/google/callback`,
+            "_self"
+        )
+    }    
 
     return (
         <Layout>
@@ -115,6 +150,13 @@ const Login = () => {
                             </Box>
                         </form>
                         <br/>
+                        <div>
+                            <p>or</p>
+                            <button sx={{ marginTop: 2 }} onClick={googleAuth} >
+                                <img src="./image" alt= "google icon" />
+                                <span> Sing in with Google</span>
+                            </button>
+                        </div>
                         <Box sx={{display: 'flex',flexDirection: 'column',alignItems: 'center',justifyContent: 'center'}}>
                         <Typography variant="body2">If forgot password,Click Here
                             <Link href="/forgot-password"> Forgot Password?</Link>
