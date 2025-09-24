@@ -2,6 +2,12 @@ import slugify from "slugify"
 import promotionModel from "../models/promotionModel.js"
 import fs from 'fs'
 import sanitize from "mongo-sanitize";
+import path from "path"; 
+
+// Constants for file security
+const UPLOAD_DIR = path.join(process.cwd(), "uploads"); // safe upload dir
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const MAX_SIZE = 1 * 1024 * 1024; // 1 MB
 
 export const createPromotionController = async(req,res) => {
     try{
@@ -39,15 +45,29 @@ export const createPromotionController = async(req,res) => {
                 return res.status(500).send({error:'Offering shop is required'})
             case !isActive:
                 return res.status(500).send({error:'Activation is required'}) 
-            case promotionImage>1000000:
-                return res.status(500).send({error:'Image should be less than 1mb'})  
+              
         }
 
         const promotions = new promotionModel({...req.fields,slug:slugify(promotionTitle)})
 
         if(promotionImage){
-            promotions.promotionImage.data = fs.readFileSync(promotionImage.path)
-            promotions.promotionImage.contentType = promotionImage.type
+            //  Validate file type
+            if (!ALLOWED_TYPES.includes(promotionImage.type)) {
+                return res.status(400).send({ error: "Invalid file type" });
+            }
+
+            //  Validate file size
+            if (promotionImage.size > MAX_SIZE) {
+                return res.status(400).send({ error: "Image must be less than 1MB" });
+            }
+
+            //  Prevent path traversal attacks
+            const safeFileName = path.basename(promotionImage.path); 
+            const safePath = path.join(UPLOAD_DIR, safeFileName);
+
+            //  Read only from safePath
+            promotions.promotionImage.data = fs.readFileSync(safePath);
+            promotions.promotionImage.contentType = promotionImage.type;
         }
         await promotions.save();
         res.status(201).send({
@@ -214,10 +234,26 @@ export const updatePromotionController = async (req, res) => {
             });
         }
 
-        // Handle image upload
+         //  Handle image upload securely
         if (req.files && req.files.promotionImage) {
-            promotion.promotionImage.data = fs.readFileSync(req.files.promotionImage.path);
-            promotion.promotionImage.contentType = req.files.promotionImage.type;
+            const file = req.files.promotionImage;
+
+            // validate type
+            if (!ALLOWED_TYPES.includes(file.type)) {
+                return res.status(400).send({ error: "Invalid file type" });
+            }
+
+            // validate size
+            if (file.size > MAX_SIZE) {
+                return res.status(400).send({ error: "Image must be less than 1MB" });
+            }
+
+            // ensure safe path
+            const safeFileName = path.basename(file.path);
+            const safePath = path.join(UPLOAD_DIR, safeFileName);
+
+            promotion.promotionImage.data = fs.readFileSync(safePath);
+            promotion.promotionImage.contentType = file.type;
         }
 
         await promotion.save();
