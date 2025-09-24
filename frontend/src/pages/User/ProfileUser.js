@@ -23,10 +23,21 @@ const ProfileUser = () => {
                         <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
                             {user.fullname ? user.fullname : 'No Name'}
                         </Typography>
-                        <Avatar sx={{ bgcolor: 'secondary.main', width: 100, height: 100 }}>
+                        {/* <Avatar sx={{ bgcolor: 'secondary.main', width: 100, height: 100 }}>
                             <Typography variant="h3" sx={{ fontWeight: 'bold' }}>
                                 {user.fullname && user.fullname.charAt(0)}
                             </Typography>
+                        </Avatar> */}
+                        <Avatar
+                            src={user?.photo || null} // Google profile picture if available
+                            alt={user?.fullname || "User"}
+                            sx={{ bgcolor: user?.photo ? "transparent" : "secondary.main", width: 100, height: 100 }}
+                        >
+                            {!user?.photo && (
+                                <Typography variant="h3" sx={{ fontWeight: "bold" }}>
+                                    {user?.fullname ? user.fullname.charAt(0) : ""}
+                                </Typography>
+                            )}
                         </Avatar>
                     </Box>
 
