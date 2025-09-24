@@ -5,6 +5,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import toast, { Toaster } from "react-hot-toast";
 import { useAuth } from '../../context/auth';
 import { Container,Link, Box, Typography, TextField, Button, Paper } from '@mui/material';
+import Google from '../../assets/googleG.png'; 
 
 const Login = () => {
     const [email, setEmail] = useState("");
@@ -151,12 +152,30 @@ const Login = () => {
                         </form>
                         <br/>
                         <div>
-                            <p>or</p>
-                            <button sx={{ marginTop: 2 }} onClick={googleAuth} >
-                                <img src="./image" alt= "google icon" />
+                            <div style={{ display: "flex", alignItems: "center" }}>
+                                <hr style={{ flex: 1, border: "none", borderTop: "1px solid " }} />
+                                <p style={{ margin: "0 10px" }}>or</p>
+                                <hr style={{ flex: 1, border: "none", borderTop: "1px solid #121212ff" }} />
+                            </div>
+                            <br/>
+                            <button
+                                sx={{ marginTop: 2 }} onClick={googleAuth} 
+                                style={{
+                                    width:'100%',
+                                    paddingTop: '2px',
+                                    paddingBottom: '2px',
+                                    borderRadius: '5px'
+                                    
+                                }}>
+                                <img src= {Google} alt= "google icon" 
+                                    style={{
+                                        width: '50px', // Set desired width
+                                        height: '25px', // Set desired height
+                                        marginRight: '16px', // Space between logo and title
+                                    }}/>
                                 <span> Sing in with Google</span>
                             </button>
-                        </div>
+                        </div><br/>
                         <Box sx={{display: 'flex',flexDirection: 'column',alignItems: 'center',justifyContent: 'center'}}>
                         <Typography variant="body2">If forgot password,Click Here
                             <Link href="/forgot-password"> Forgot Password?</Link>
