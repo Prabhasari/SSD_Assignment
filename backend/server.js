@@ -13,6 +13,7 @@ import eventRoutes from './routes/eventRoute.js'
 //import fileUpload from 'express-fileupload';
 import sanitize from "mongo-sanitize";
 import helmet from "helmet";
+import { mailer } from "./helpers/Mailer.js";
 
 import passport from "passport";
 import session from "express-session";
