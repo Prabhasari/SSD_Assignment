@@ -83,6 +83,10 @@ app.use("/api/v1/cart", shoppingcartRoutes);
 app.use("/api/v1/LostAndFound",LostAndFoundRoutes);
 app.use("/api/v1/Event",eventRoutes);
 
+// Verify SMTP once on boot (helps catch bad MAIL_* env values)
+mailer.verify()
+  .then(() => console.log('SMTP ready (Mailtrap Transactional Sandbox)'))
+  .catch(err => console.error('SMTP error:', err.message));
 
 // rest api
 app.get("/" , (req,res) => {
