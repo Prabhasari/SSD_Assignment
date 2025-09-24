@@ -12,6 +12,7 @@ import LostAndFoundRoutes from './routes/LostAndFoundRoute.js'
 import eventRoutes from './routes/eventRoute.js'
 //import fileUpload from 'express-fileupload';
 import sanitize from "mongo-sanitize";
+import helmet from "helmet";
 
 import cors from "cors";
 
@@ -31,6 +32,7 @@ const app = express();
 app.use(cors())
 app.use(express.json())
 app.use(morgan('dev'))
+app.use(helmet())
 
 // sanitize all incoming inputs BEFORE routes
 app.use((req, res, next) => {
