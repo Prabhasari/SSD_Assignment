@@ -12,6 +12,11 @@ import LostAndFoundRoutes from './routes/LostAndFoundRoute.js'
 import eventRoutes from './routes/eventRoute.js'
 //import fileUpload from 'express-fileupload';
 import sanitize from "mongo-sanitize";
+import helmet from "helmet";
+
+import passport from "passport";
+import session from "express-session";
+import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 
 import cors from "cors";
 
@@ -24,13 +29,42 @@ connectDB();
 //rest object
 const app = express();
 
+app.use(session({
+    secret: "secrete",
+    resave: false,
+    saveUninitialized: true,
+}))
+
 // Middleware to handle file uploads
 //app.use(fileUpload());
 
 //middelwares
-app.use(cors())
+app.use(cors({
+    origin: "http://localhost:3000",
+	methods: "GET,POST,PUT,DELETE",
+	credentials: true,
+}))
 app.use(express.json())
 app.use(morgan('dev'))
+app.use(helmet())
+app.use(passport.initialize());
+app.use(passport.session());
+
+passport.use(
+    new GoogleStrategy({
+        clientID: process.env.GOOGLE_CLIENT_ID,
+        clientSecret : process.env.GOOGLE_CLIENT_SECRET,
+        callbackURL: process.env.CALLBACK_URL,
+        scope: ["profile", "email"],
+    },function (accessToken, refreshToken, profile, callback) {
+        callback(null, profile) 
+    })
+);
+
+passport.serializeUser((user, done ) => done(null, user));
+passport.deserializeUser((user, done) => done(null, user));
+
+
 
 // sanitize all incoming inputs BEFORE routes
 app.use((req, res, next) => {

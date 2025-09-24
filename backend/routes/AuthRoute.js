@@ -1,5 +1,6 @@
 import express from 'express'
 import multer from 'multer';
+
 import rateLimit from 'express-rate-limit';
 
 import {
@@ -29,6 +30,10 @@ import {
 } from '../controllers/AuthController.js';
 
 import { isAdmin, requireSignIn } from '../middlewares/AuthMiddleware.js'
+
+import passport from 'passport';
+import jwt from "jsonwebtoken";
+
 
 //router object
 const router = express.Router()
@@ -107,6 +112,77 @@ router.get('/get-shopGrowthData', getShopGrowthController );
 router.get('/get-shopCountByCategory', getShopCountByCategoryController );
 
 router.get('/logo/:pid', logoController );
+
+
+//google login
+router.get("/google", passport.authenticate("google",{ scope: ["profile", "email"]}));
+
+router.get('/google/callback', passport.authenticate( "google", {
+        // successRedirect: process.env.CLIENT_URL,
+        failureRedirect: "/login/failed",
+    }),
+    (req,res) => {
+        req.user.role = 0;
+        req.user.email = req.user.emails[0].value;
+        req.user.fullname = req.user.name.givenName
+        console.log(req.user);
+        const token = jwt.sign({_id: req.user._id, role: req.user.role},
+            process.env.JWT_SECRET, 
+            {expiresIn: "7d"}
+        );
+        // console.log("token -> ", token)
+        // console.log("Google login success, user:", req.user);
+        res.redirect(`${process.env.CLIENT_URL}/login?token=${token}&user=${encodeURIComponent(
+            JSON.stringify(req.user)
+        )}`)
+        // res.redirect(
+        //     `${process.env.CLIENT_URL}/login?token=${token}&email=${req.user.emails[0].value}&name=${encodeURIComponent(req.user.displayName)}`
+        // );
+
+    //     res.json({
+    //         token,
+    //         role: req.user.role,
+    //         user: req.user,
+    // });
+
+    }
+)
+
+router.get("/login/failed", (req,res) => {
+    res.status(401).json({
+        error: true,
+        message: "Log in Failed"
+    })
+})
+
+router.get("/logout", (req, res) => {
+	req.logout();
+	res.redirect(process.env.CLIENT_URL);
+});
+
+//existing user
+router.get("/login/success", (req, res) => {
+    console.log('first')
+    if (req.user) {
+        const userWithRole = {
+            ...req.user, 
+            role: 0
+        };
+        console.log('awa1')
+        console.log(userWithRole);
+
+        res.status(200).json({
+            error:false,
+            message: "Successfullty Loged In",
+            user: userWithRole,
+        })
+    } else {
+       res.status(403).send({
+        success: false,
+        message: "Login Failed",
+       })
+    }
+})
 
 
 export default router

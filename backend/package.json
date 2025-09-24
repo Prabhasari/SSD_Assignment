@@ -13,14 +13,21 @@
   "license": "MIT",
   "dependencies": {
     "bcrypt": "^5.1.1",
+    "body-parser": "^1.20.3",
     "colors": "^1.4.0",
     "concurrently": "^8.2.2",
+    "cookie": "^1.0.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "express-fileupload": "^1.5.1",
     "express-formidable": "^1.2.0",
+
     "express-rate-limit": "^8.1.0",
+
+    "helmet": "^8.1.0",
+    "express-session": "^1.18.2",
+
     "html2canvas": "^1.4.1",
     "jsonwebtoken": "^9.0.2",
     "jspdf": "^3.0.3",
@@ -33,6 +40,8 @@
     "nodemailer": "^7.0.6",
     "nodemodule": "^0.3.0",
     "nodemon": "^3.1.4",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
     "pdfkit": "^0.15.0",
     "react-bootstrap": "^2.10.4",
     "react-datepicker": "^7.3.0",
