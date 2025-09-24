@@ -3,7 +3,10 @@ import shopModel from "../models/shopModel.js";
 import userModel from "../models/userModel.js";
 import JWT from "jsonwebtoken";
 import sanitize from "mongo-sanitize";
-import { z } from "zod";
+import { success, z } from "zod";
+import crypto from "crypto";
+import dayjs from "dayjs";
+import { sendResetEmail } from "../helpers/Mailer.js";
 
 // Register user
 export const userRegisterController = async (req, res) => {
@@ -496,49 +499,127 @@ export const deleteShopProfileController = async (req, res) => {
 };
   
 
-export const forgotPasswordController = async (req, res) => {
+// export const forgotPasswordController = async (req, res) => {
+//   try {
+//     const { email, newPassword, re_Password } = req.body;
+
+//     // Validate input fields
+//     if (!email) return res.status(400).send({ message: 'Email is required' });
+//     if (!newPassword) return res.status(400).send({ message: 'New password is required' });
+//     if (!re_Password) return res.status(400).send({ message: 'Please confirm your new password' });
+//     if (newPassword !== re_Password) return res.status(400).send({ message: 'Passwords do not match' });
+
+//     // Sanitize email to prevent NoSQL injection
+//     const sanitizedEmail = sanitize(email);
+
+//     // Check if the user exists
+//     const user = await userModel.findOne({ email: { $eq: sanitizedEmail } });
+//     if (!user) {
+//       return res.status(404).send({
+//         success: false,
+//         message: "User with this email does not exist",
+//       });
+//     }
+
+//     // Hash the new password
+//     const hashedPassword = await hashPassword(newPassword);
+
+//     // Update the user's password
+//     await userModel.findByIdAndUpdate(user._id, { password: hashedPassword });
+
+//     return res.status(200).send({
+//       success: true,
+//       message: "Password reset successfully",
+//     });
+
+//   } catch (error) {
+//     console.error("Forgot password error:", error);
+//     return res.status(500).send({
+//       success: false,
+//       message: 'Something went wrong',
+//       error: error.message,
+//     });
+//   }
+// };
+
+export const requestPasswordReset = async (req, res) => {
   try {
-    const { email, newPassword, re_Password } = req.body;
+    console.log('HIT /auth/reset/request', req.body?.email); // ⬅️ log
 
-    // Validate input fields
-    if (!email) return res.status(400).send({ message: 'Email is required' });
-    if (!newPassword) return res.status(400).send({ message: 'New password is required' });
-    if (!re_Password) return res.status(400).send({ message: 'Please confirm your new password' });
-    if (newPassword !== re_Password) return res.status(400).send({ message: 'Passwords do not match' });
+    const email = sanitize(req.body.email);
+    // Always return 200 to avoid user enumeration
+    const user = await userModel.findOne({ email: { $eq: email } }).select("_id email");
 
-    // Sanitize email to prevent NoSQL injection
-    const sanitizedEmail = sanitize(email);
+    if (user) {
+      const token = crypto.randomBytes(32).toString("hex");
+      const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
 
-    // Check if the user exists
-    const user = await userModel.findOne({ email: { $eq: sanitizedEmail } });
-    if (!user) {
-      return res.status(404).send({
-        success: false,
-        message: "User with this email does not exist",
+      await userModel.findByIdAndUpdate(user._id, {
+        resetTokenHash: tokenHash,
+        resetTokenExp : dayjs().add(30, "minute").toDate(),
       });
+
+      // === Send email ===
+      const base = process.env.APP_PUBLIC_URL || "http://localhost:5173";
+      const resetUrl = `${base}/reset?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
+
+      try {
+        const info = await sendResetEmail(email, resetUrl);
+        console.log('Mail sent (nodemailer):', info?.messageId || info?.response || 'ok');
+      } catch (err) {
+        console.warn('Email send failed; fallback link:', resetUrl, err?.message);
+      }
     }
-
-    // Hash the new password
-    const hashedPassword = await hashPassword(newPassword);
-
-    // Update the user's password
-    await userModel.findByIdAndUpdate(user._id, { password: hashedPassword });
 
     return res.status(200).send({
       success: true,
-      message: "Password reset successfully",
+      message: "If the account exists, a password reset email has been sent.",
     });
-
-  } catch (error) {
-    console.error("Forgot password error:", error);
-    return res.status(500).send({
-      success: false,
-      message: 'Something went wrong',
-      error: error.message,
-    });
+  } catch (e) {
+    console.error("requestPasswordReset error:", e);
+    return res.status(500).send({ success: false, message: "Error requesting reset" });
   }
 };
 
+export const performPasswordReset = async (req, res) => {
+  try {
+    const { email, token, newPassword, re_Password } = req.body;
+
+    if (!newPassword || newPassword.length < 8) 
+    return res.status(400).send({ message: "Password must be at least 8 characters long" });
+
+    // Both values come from the same user request; not a secret comparison.
+    // Timing attacks do not apply here (no attacker-visible oracle).
+    if (newPassword !== re_Password) 
+    return res.status(400).send({ message: "Passwords do not match" });
+
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+
+    const user = await userModel.findOne({
+      email: { $eq: sanitize(email) },
+      resetTokenHash: tokenHash,
+      resetTokenExp: { $gt: new Date() },
+    }).select("_id");
+
+    if (!user) {
+      return res.status(400).send({ success: false, message: "Invalid or expired token" });
+    }
+
+    const pwHash = await hashPassword(newPassword);
+    await userModel.findByIdAndUpdate(user._id, {
+      password: pwHash,
+      resetTokenHash: undefined,
+      resetTokenExp: undefined,
+    });
+
+    // (Optional) Invalidate sessions/JWTs for the user here (if maintain a session store)
+
+    return res.status(200).send({ success: true, message: "Password reset successfully" });
+  } catch (e) {
+    console.error("performPasswordReset error:", e);
+    return res.status(500).send({ success: false, message: "Error performing reset" });
+  }
+};
   
 // Controller to get total user and shop count
 export const getTotalUserCountController = async (req, res) => {

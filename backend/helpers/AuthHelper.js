@@ -1,16 +1,22 @@
-import bycrypt from 'bcrypt';
+import bcrypt from 'bcrypt';
 
-//hashpassword
+// Hash a plaintext password
 export const hashPassword = async (password) => {
     try{
-        const saltRounds = 10;
-        const hashedPassword = await bycrypt.hash(password,saltRounds);
-        return hashedPassword;        
+        const saltRounds = 12;
+        return await bcrypt.hash(password,saltRounds);       
     }catch(error){
-        console.log(error);
+        console.error("Error in hashing password",error);
+        throw error;
     }
 };
 
+// Compare plaintext password with stored password
 export const comparePassword = async (password,hashPassword) => {
-    return bycrypt.compare(password,hashPassword);
-}
+    try{
+        return await bcrypt.compare(password,hashPassword);
+    } catch(error){
+        console.error("Error in comparing password",error);
+        throw error;
+    }
+};
